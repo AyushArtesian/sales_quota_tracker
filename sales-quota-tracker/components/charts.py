@@ -12,7 +12,7 @@ import pandas as pd
 
 def billing_vs_quota_chart(df: pd.DataFrame):
     """Grouped bar chart: Billing vs Quota per client."""
-    st.subheader("📊 Client Billing vs Quota")
+    st.subheader("Client Billing vs Quota")
 
     if df.empty:
         st.info("No data to display.")
@@ -48,7 +48,7 @@ def billing_vs_quota_chart(df: pd.DataFrame):
 
 def salesperson_performance_chart(df: pd.DataFrame):
     """Horizontal bar chart showing billing per sales person."""
-    st.subheader("👤 Sales Person Performance")
+    st.subheader("Sales Person Performance")
 
     if df.empty:
         st.info("No data to display.")
@@ -75,7 +75,7 @@ def salesperson_performance_chart(df: pd.DataFrame):
 
 def achievement_distribution_chart(df: pd.DataFrame):
     """Pie / donut chart showing distribution of achievement statuses."""
-    st.subheader("🏆 Quota Achievement Distribution")
+    st.subheader("Quota Achievement Distribution")
 
     if df.empty:
         st.info("No data to display.")
@@ -106,7 +106,7 @@ def achievement_distribution_chart(df: pd.DataFrame):
 
 def monthly_trend_chart(df: pd.DataFrame):
     """Line chart: billing trend over months."""
-    st.subheader("📈 Monthly Billing Trend")
+    st.subheader("Monthly Billing Trend")
 
     if df.empty:
         st.info("No data to display.")

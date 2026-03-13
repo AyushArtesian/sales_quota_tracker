@@ -10,7 +10,7 @@ import pandas as pd
 
 def render_achievement_table(df: pd.DataFrame):
     """Show the detailed achievement table with colour-coded status."""
-    st.subheader("📋 Quota Achievement Details")
+    st.subheader("Quota Achievement Details")
 
     if df.empty:
         st.info("No data to display.")
@@ -62,7 +62,7 @@ def render_achievement_table(df: pd.DataFrame):
 
 def render_leaderboard(df: pd.DataFrame):
     """Show top-performing clients and sales persons by billing."""
-    st.subheader("🏅 Leaderboard")
+    st.subheader("Leaderboard")
 
     if df.empty:
         st.info("No data to display.")
@@ -105,5 +105,5 @@ def render_leaderboard(df: pd.DataFrame):
 
 def render_raw_data(df: pd.DataFrame):
     """Show raw uploaded data in an expandable section."""
-    with st.expander("📂 View Raw Uploaded Data"):
+    with st.expander("View Raw Uploaded Data"):
         st.dataframe(df, width="stretch", height=400)

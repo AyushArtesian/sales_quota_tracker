@@ -91,11 +91,11 @@ st.markdown(
 )
 
 # ── Header ─────────────────────────────────────────────────────────────
-st.title("📊 Sales Quota Tracker")
+st.title("Sales Quota Tracker")
 st.caption("Upload billing data · Set quotas · Track achievement in real time")
 
 # ── Sidebar: File upload ───────────────────────────────────────────────
-st.sidebar.title("📂 Upload Data")
+st.sidebar.title("Upload Data")
 uploaded_file = st.sidebar.file_uploader(
     "Upload Billing Excel",
     type=["xlsx", "xls"],

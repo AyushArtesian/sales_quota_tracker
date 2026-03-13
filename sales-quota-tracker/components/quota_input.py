@@ -12,7 +12,7 @@ from utils.quota_manager import get_quotas, update_quotas
 
 def render_quota_editor():
     """Render the editable quota table and individual number inputs."""
-    st.subheader("✏️ Manual Quota Entry")
+    st.subheader("Manual Quota Entry")
 
     quotas = get_quotas()
     if quotas.empty:

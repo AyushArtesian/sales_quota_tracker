@@ -14,13 +14,13 @@ def render_metrics(metrics: dict):
 
     with c1:
         st.metric(
-            label="💰 Total Billing",
+            label="Total Billing",
             value=f"₹{metrics['total_billing']:,.2f}",
         )
 
     with c2:
         st.metric(
-            label="🎯 Total Quota",
+            label="Total Quota",
             value=f"₹{metrics['total_quota']:,.2f}",
         )
 
@@ -28,7 +28,7 @@ def render_metrics(metrics: dict):
         overall = metrics["overall_achievement"]
         delta_color = "normal" if overall >= 100 else ("off" if overall >= 80 else "inverse")
         st.metric(
-            label="📊 Overall Achievement",
+            label="Overall Achievement",
             value=f"{overall:.1f}%",
             delta=f"{'On Track' if overall >= 80 else 'Behind Target'}",
             delta_color=delta_color,
@@ -37,7 +37,7 @@ def render_metrics(metrics: dict):
 
 def render_sidebar_filters(df: pd.DataFrame) -> dict:
     """Render sidebar filter widgets and return selected values."""
-    st.sidebar.header("🔎 Filters")
+    st.sidebar.header("Filters")
 
     # Ensure month sorting is chronological (e.g., Jan, Feb, Mar) rather than alphabetic
     months = list(df["Month"].unique())
