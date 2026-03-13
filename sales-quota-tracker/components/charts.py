@@ -79,23 +79,26 @@ def achievement_status_chart(df: pd.DataFrame):
 
 
 def monthly_trend_chart(df: pd.DataFrame):
-    """Line chart: billing trend over target start months."""
-    st.subheader("Target Start Month Trend")
+    """Line chart: billing trend over calendar months."""
+    st.subheader("Monthly Billing Trend")
 
     if df.empty:
         st.info("No data to display.")
         return
 
-    month_df = df.groupby("Start Month", as_index=False).agg(
+    # Prefer actual billing month field if provided, otherwise fall back to start month
+    month_field = "Month" if "Month" in df.columns else "Start Month"
+
+    month_df = df.groupby(month_field, as_index=False).agg(
         {"Total Billing": "sum", "Quota": "sum"}
     )
 
     # Ensure month ordering is chronological (e.g., Jan, Feb, Mar)
     try:
-        month_df["_month_dt"] = pd.to_datetime(month_df["Start Month"], format="%b-%Y", errors="coerce")
+        month_df["_month_dt"] = pd.to_datetime(month_df[month_field], format="%b-%Y", errors="coerce")
         month_df = month_df.sort_values("_month_dt").drop(columns=["_month_dt"])
     except Exception:
-        month_df = month_df.sort_values("Start Month")
+        month_df = month_df.sort_values(month_field)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(

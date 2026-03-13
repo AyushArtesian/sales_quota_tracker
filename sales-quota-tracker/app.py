@@ -34,9 +34,17 @@ from components.tables import render_achievement_table, render_leaderboard, rend
 
 
 # ── Page config ────────────────────────────────────────────────────────
+# Use a local favicon (base64 embedded) to customize the Streamlit tab icon
+ICON_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAgElEQVR4nOXOQQEAIBCAMCSISQxme41x"
+    "D5Zga5/7CJM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4"
+    "iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iZM4iXM6MO0DBlECUa"
+    "B2VeIAAAAASUVORK5CYII="
+)
+
 st.set_page_config(
     page_title="Sales Quota Tracker",
-    page_icon="📊",
+    page_icon=f"data:image/png;base64,{ICON_BASE64}",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -156,6 +164,7 @@ if uploaded_file is not None:
         with chart_col3:
             achievement_status_chart(filtered_df)
         with chart_col4:
+            # Use the computed achievement dataset (includes Total Billing and Quota)
             monthly_trend_chart(filtered_df)
 
         st.markdown("---")
