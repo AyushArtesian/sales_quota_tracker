@@ -9,7 +9,6 @@ Run:  streamlit run app.py
 
 import os
 import sys
-import pickle
 
 # Ensure the local package folders are on the import path (useful on some deployment platforms)
 sys.path.insert(0, os.path.dirname(__file__))
@@ -26,6 +25,7 @@ from utils.client_manager import (
     detect_new_clients,
     add_new_clients_with_dates,
 )
+from utils.billing_manager import save_billing_data, load_billing_data, clear_billing_data
 from utils.calculations import compute_achievement, overall_metrics
 
 # ── Component imports ──────────────────────────────────────────────────
@@ -41,41 +41,13 @@ from components.client_master import render_client_master
 from components.tables import render_achievement_table, render_leaderboard, render_raw_data
 
 
-# ── Caching & persistence ──────────────────────────────────────────────
+# ── Stage persistence (UI navigation state) ────────────────────────────
 CACHE_DIR = ".streamlit_cache"
-RAW_DF_CACHE_FILE = os.path.join(CACHE_DIR, "raw_df.pkl")
 STAGE_CACHE_FILE = os.path.join(CACHE_DIR, "stage.txt")
 
 def ensure_cache_dir():
     """Create cache directory if it doesn't exist."""
     os.makedirs(CACHE_DIR, exist_ok=True)
-
-def save_raw_df_cache(df: pd.DataFrame):
-    """Persist the raw dataframe to disk."""
-    ensure_cache_dir()
-    try:
-        with open(RAW_DF_CACHE_FILE, "wb") as f:
-            pickle.dump(df, f)
-    except Exception as e:
-        st.warning(f"Could not cache data: {e}")
-
-def load_raw_df_cache() -> pd.DataFrame:
-    """Load the cached raw dataframe from disk, if available."""
-    if os.path.exists(RAW_DF_CACHE_FILE):
-        try:
-            with open(RAW_DF_CACHE_FILE, "rb") as f:
-                return pickle.load(f)
-        except Exception as e:
-            st.warning(f"Could not load cached data: {e}")
-    return pd.DataFrame()
-
-def clear_raw_df_cache():
-    """Clear the cached dataframe."""
-    if os.path.exists(RAW_DF_CACHE_FILE):
-        try:
-            os.remove(RAW_DF_CACHE_FILE)
-        except Exception:
-            pass
 
 def save_stage_cache(stage: str):
     """Persist the current stage (quota or dashboard) to cache."""
@@ -184,16 +156,16 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 # ── Main flow ──────────────────────────────────────────────────────────
-# INITIALIZATION: Load from cache if session state is empty
+# INITIALIZATION: Load from database if session state is empty
 if "raw_df" not in st.session_state:
-    cached_df = load_raw_df_cache()
-    if not cached_df.empty:
-        st.session_state["raw_df"] = cached_df
+    loaded_df = load_billing_data()
+    if not loaded_df.empty:
+        st.session_state["raw_df"] = loaded_df
         st.session_state["stage"] = load_stage_cache()
         # Reinitialize quotas and clients from their database sources
-        init_quota_state(cached_df)
-        init_client_state(cached_df)
-        st.sidebar.success("✓ Loaded previous data from cache")
+        init_quota_state(loaded_df)
+        init_client_state(loaded_df)
+        st.sidebar.success("✓ Loaded data from database")
 
 # Get raw_df and stage from session state
 raw_df = st.session_state.get("raw_df", pd.DataFrame())
@@ -206,7 +178,7 @@ if uploaded_file is not None:
     if st.session_state.get("raw_file_name") != uploaded_file.name:
         st.session_state["stage"] = "quota"
         st.session_state["raw_file_name"] = uploaded_file.name
-        clear_raw_df_cache()
+        clear_billing_data()
         save_stage_cache("quota")
 
     # 1. Read & validate
@@ -259,7 +231,7 @@ if uploaded_file is not None:
         
         raw_df = apply_client_master_to_raw(raw_df)
         st.session_state["raw_df"] = raw_df
-        save_raw_df_cache(raw_df)  # Persist to cache for next refresh
+        save_billing_data(raw_df)  # Persist to database for next refresh
 
 # After file upload processing, refresh raw_df and stage from session state
 raw_df = st.session_state.get("raw_df", pd.DataFrame())
