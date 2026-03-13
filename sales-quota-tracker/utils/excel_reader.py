@@ -30,7 +30,8 @@ def read_excel(uploaded_file) -> pd.DataFrame | None:
     # Basic type coercion
     df["Billing Amount"] = pd.to_numeric(df["Billing Amount"], errors="coerce").fillna(0)
 
-    month_as_dt = pd.to_datetime(df["Month"], errors="coerce")
+    # Parse month values in expected format (e.g. Jan-2026). Keep original if parsing fails.
+    month_as_dt = pd.to_datetime(df["Month"], format="%b-%Y", errors="coerce")
     month_labels = month_as_dt.dt.strftime("%b-%Y")
     df["Month"] = month_labels.where(month_as_dt.notna(), df["Month"].astype(str)).astype(str).str.strip()
 
