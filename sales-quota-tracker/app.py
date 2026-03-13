@@ -9,6 +9,7 @@ Run:  streamlit run app.py
 
 import os
 import sys
+import pickle
 
 # Ensure the local package folders are on the import path (useful on some deployment platforms)
 sys.path.insert(0, os.path.dirname(__file__))
@@ -19,7 +20,12 @@ import pandas as pd
 # ── Utility imports ────────────────────────────────────────────────────
 from utils.excel_reader import read_excel
 from utils.quota_manager import init_quota_state, get_quotas, update_quotas
-from utils.client_manager import init_client_state
+from utils.client_manager import (
+    init_client_state,
+    apply_client_master_to_raw,
+    detect_new_clients,
+    add_new_clients_with_dates,
+)
 from utils.calculations import compute_achievement, overall_metrics
 
 # ── Component imports ──────────────────────────────────────────────────
@@ -35,7 +41,67 @@ from components.client_master import render_client_master
 from components.tables import render_achievement_table, render_leaderboard, render_raw_data
 
 
+# ── Caching & persistence ──────────────────────────────────────────────
+CACHE_DIR = ".streamlit_cache"
+RAW_DF_CACHE_FILE = os.path.join(CACHE_DIR, "raw_df.pkl")
+STAGE_CACHE_FILE = os.path.join(CACHE_DIR, "stage.txt")
+
+def ensure_cache_dir():
+    """Create cache directory if it doesn't exist."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+def save_raw_df_cache(df: pd.DataFrame):
+    """Persist the raw dataframe to disk."""
+    ensure_cache_dir()
+    try:
+        with open(RAW_DF_CACHE_FILE, "wb") as f:
+            pickle.dump(df, f)
+    except Exception as e:
+        st.warning(f"Could not cache data: {e}")
+
+def load_raw_df_cache() -> pd.DataFrame:
+    """Load the cached raw dataframe from disk, if available."""
+    if os.path.exists(RAW_DF_CACHE_FILE):
+        try:
+            with open(RAW_DF_CACHE_FILE, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            st.warning(f"Could not load cached data: {e}")
+    return pd.DataFrame()
+
+def clear_raw_df_cache():
+    """Clear the cached dataframe."""
+    if os.path.exists(RAW_DF_CACHE_FILE):
+        try:
+            os.remove(RAW_DF_CACHE_FILE)
+        except Exception:
+            pass
+
+def save_stage_cache(stage: str):
+    """Persist the current stage (quota or dashboard) to cache."""
+    ensure_cache_dir()
+    try:
+        with open(STAGE_CACHE_FILE, "w") as f:
+            f.write(stage)
+    except Exception:
+        pass
+
+def load_stage_cache() -> str:
+    """Load the cached stage from disk, defaults to 'quota'."""
+    if os.path.exists(STAGE_CACHE_FILE):
+        try:
+            with open(STAGE_CACHE_FILE, "r") as f:
+                return f.read().strip() or "quota"
+        except Exception:
+            pass
+    return "quota"
+
+
 # ── Page config ────────────────────────────────────────────────────────
+# Initialize tab tracking (for Target Setup vs Client Master navigation)
+if "active_tab" not in st.session_state:
+    st.session_state["active_tab"] = 0  # 0 = Target Setup, 1 = Client Master
+
 # Use a local favicon (base64 embedded) to customize the Streamlit tab icon
 ICON_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAgElEQVR4nOXOQQEAIBCAMCSISQxme41x"
@@ -55,18 +121,18 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Card-style metrics */
+    /* Card-style metrics - simple plain style */
     [data-testid="stMetric"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #f8f9fa;
         padding: 1rem 1.2rem;
-        border-radius: 0.75rem;
-        color: white !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        border-radius: 0.5rem;
+        border: 1px solid #e0e0e0;
+        color: #333 !important;
     }
     [data-testid="stMetric"] label,
     [data-testid="stMetric"] [data-testid="stMetricValue"],
     [data-testid="stMetric"] [data-testid="stMetricDelta"] {
-        color: white !important;
+        color: #333 !important;
     }
 
     /* Sidebar styling */
@@ -118,12 +184,30 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 # ── Main flow ──────────────────────────────────────────────────────────
+# INITIALIZATION: Load from cache if session state is empty
+if "raw_df" not in st.session_state:
+    cached_df = load_raw_df_cache()
+    if not cached_df.empty:
+        st.session_state["raw_df"] = cached_df
+        st.session_state["stage"] = load_stage_cache()
+        # Reinitialize quotas and clients from their database sources
+        init_quota_state(cached_df)
+        init_client_state(cached_df)
+        st.sidebar.success("✓ Loaded previous data from cache")
+
+# Get raw_df and stage from session state
+raw_df = st.session_state.get("raw_df", pd.DataFrame())
+stage = st.session_state.get("stage", "quota")
+
+# PROCESS FILE UPLOAD if present
 if uploaded_file is not None:
 
-    # Reset stage when a new file is uploaded
+    # Reset stage and clear cache when a new file is uploaded
     if st.session_state.get("raw_file_name") != uploaded_file.name:
         st.session_state["stage"] = "quota"
         st.session_state["raw_file_name"] = uploaded_file.name
+        clear_raw_df_cache()
+        save_stage_cache("quota")
 
     # 1. Read & validate
     raw_df, file_type = read_excel(uploaded_file)
@@ -162,66 +246,109 @@ if uploaded_file is not None:
         else:
             st.session_state["raw_df"] = raw_df
 
-    # 2. Initialise quotas from available billing data
+    # 2. Initialize quotas and clients from billing data
     if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
         init_quota_state(raw_df)
         init_client_state(raw_df)
+        
+        # Detect new clients and show modal dialog to collect acquisition dates
+        new_clients = detect_new_clients(raw_df)
+        if new_clients:
+            st.session_state["show_new_client_modal"] = True
+            st.session_state["new_clients"] = new_clients
+        
+        raw_df = apply_client_master_to_raw(raw_df)
+        st.session_state["raw_df"] = raw_df
+        save_raw_df_cache(raw_df)  # Persist to cache for next refresh
 
-    # 3. Stage flow: quota setup → dashboard
-    stage = st.session_state.get("stage", "quota")
+# After file upload processing, refresh raw_df and stage from session state
+raw_df = st.session_state.get("raw_df", pd.DataFrame())
+stage = st.session_state.get("stage", "quota")
+
+# 3. RENDER: Display quota setup or dashboard
+if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
 
     if stage == "quota":
-        if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
-            st.info("Please define your target quotas before viewing the dashboard.")
-            tab_targets, tab_clients = st.tabs(["Target Setup", "Client Master"])
+        st.info("Please define your target quotas before viewing the dashboard.")
+        
+        # Use radio buttons for section selection
+        active_tab = st.session_state.get("active_tab", 0)
+        selected_section = st.radio(
+            "Choose section to edit:",
+            ["Target Setup", "Client Master"],
+            index=active_tab,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+        # Update session state based on selection
+        if "Target Setup" in selected_section:
+            st.session_state["active_tab"] = 0
+            render_quota_editor(raw_df)
+        else:
+            st.session_state["active_tab"] = 1
+            render_client_master()
 
-            with tab_targets:
-                render_quota_editor(raw_df)
-
-            with tab_clients:
-                render_client_master()
-
-            if st.button("Proceed to Dashboard"):
+        st.markdown("---")
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if st.button("Back to Dashboard", key="btn_back_to_dashboard", use_container_width=True):
                 st.session_state["stage"] = "dashboard"
-                if hasattr(st, "experimental_rerun"):
-                    st.experimental_rerun()
-        else:
-            st.info("No billing data available yet. Upload a billing file to define targets and view dashboard.")
+                save_stage_cache("dashboard")
+                st.rerun()
+        with btn_col2:
+            if st.button("Save & View Dashboard", key="btn_proceed_dashboard", use_container_width=True):
+                st.session_state["stage"] = "dashboard"
+                save_stage_cache("dashboard")
+                st.rerun()
     else:
-        if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
-            quotas = get_quotas()
-            achievement_df = compute_achievement(raw_df, quotas)
-            filters = render_sidebar_filters(achievement_df)
-            filtered_df = apply_filters(achievement_df, filters)
-            metrics = overall_metrics(filtered_df)
+        quotas = get_quotas()
+        achievement_df = compute_achievement(raw_df, quotas)
+        filters = render_sidebar_filters(achievement_df)
+        filtered_df = apply_filters(achievement_df, filters)
+        metrics = overall_metrics(filtered_df)
 
-            st.markdown("---")
-            render_metrics(metrics)
+        # Navigation actions
+        st.markdown("---")
+        nav_col1, nav_col2 = st.columns(2, gap="medium")
+        with nav_col1:
+            if st.button("Edit Target Setup", key="btn_target_setup", use_container_width=True):
+                st.session_state["active_tab"] = 0
+                st.session_state["stage"] = "quota"
+                save_stage_cache("quota")
+                st.rerun()
 
-            st.markdown("---")
-            chart_col1, chart_col2 = st.columns(2)
-            with chart_col1:
-                salesperson_quota_chart(filtered_df)
-            with chart_col2:
-                salesperson_achievement_chart(filtered_df)
+        with nav_col2:
+            if st.button("Edit Client Master", key="btn_client_master", use_container_width=True):
+                st.session_state["active_tab"] = 1
+                st.session_state["stage"] = "quota"
+                save_stage_cache("quota")
+                st.rerun()
 
-            st.markdown("---")
-            chart_col3, chart_col4 = st.columns(2)
-            with chart_col3:
-                achievement_status_chart(filtered_df)
-            with chart_col4:
-                monthly_trend_chart(filtered_df)
+        st.markdown("---")
+        render_metrics(metrics)
 
-            st.markdown("---")
-            render_achievement_table(filtered_df)
-            st.markdown("---")
-            render_leaderboard(filtered_df)
-            render_raw_data(raw_df)
-        else:
-            st.info("No billing data available yet. Upload a billing file to view dashboards.")
+        st.markdown("---")
+        chart_col1, chart_col2 = st.columns(2)
+        with chart_col1:
+            salesperson_quota_chart(filtered_df)
+        with chart_col2:
+            salesperson_achievement_chart(filtered_df)
 
+        st.markdown("---")
+        chart_col3, chart_col4 = st.columns(2)
+        with chart_col3:
+            achievement_status_chart(filtered_df)
+        with chart_col4:
+            monthly_trend_chart(filtered_df)
+
+        st.markdown("---")
+        render_achievement_table(filtered_df)
+        st.markdown("---")
+        render_leaderboard(filtered_df)
+        render_raw_data(raw_df)
 else:
-    # Landing state – no file uploaded yet
+    # No billing data available - show landing page
     st.markdown(
         """
         ### Welcome!
@@ -267,3 +394,40 @@ else:
         file_name="billing_template.csv",
         mime="text/csv",
     )
+
+# ── Modal dialog for new clients ─────────────────────────────────────
+if st.session_state.get("show_new_client_modal"):
+    st.markdown("---")
+    st.warning("New clients detected! Please provide acquisition dates for each new client.")
+    
+    new_clients = st.session_state.get("new_clients", [])
+    acquisition_dates = {}
+    
+    for client_name in new_clients:
+        st.markdown(f"##### {client_name}")
+        acq_date = st.date_input(
+            f"Acquisition Date for {client_name}:",
+            key=f"acq_date_{client_name}",
+            help="Enter when this client was acquired"
+        )
+        if acq_date:
+            acquisition_dates[client_name] = acq_date.strftime("%Y-%m-%d")
+        else:
+            acquisition_dates[client_name] = ""
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Save Client Dates", key="save_new_clients", use_container_width=True):
+            # Save the new clients with their acquisition dates
+            add_new_clients_with_dates(new_clients, acquisition_dates)
+            st.session_state["show_new_client_modal"] = False
+            st.session_state["new_clients"] = []
+            st.success("New clients added successfully!")
+            st.rerun()
+    
+    with col2:
+        if st.button("Skip for Now", key="skip_new_clients", use_container_width=True):
+            st.session_state["show_new_client_modal"] = False
+            st.session_state["new_clients"] = []
+            st.info("You can edit client dates anytime in the Client Master section.")
+            st.rerun()

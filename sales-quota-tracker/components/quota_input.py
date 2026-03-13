@@ -43,7 +43,7 @@ def render_quota_editor(raw_df: pd.DataFrame):
                 "Start Month": st.column_config.TextColumn(help="Format: Jan-2026"),
                 "Duration Months": st.column_config.NumberColumn(min_value=1, step=1, format="%d"),
                 "Quota": st.column_config.NumberColumn(
-                    "Quota (₹)", min_value=0, step=1000, format="₹%d"
+                    "Quota (USD)", min_value=0, step=1000, format="$%d"
                 ),
             },
             width="stretch",
@@ -58,7 +58,7 @@ def render_quota_editor(raw_df: pd.DataFrame):
 
     # ── Tab 2: Add target form ─────────────────────────────────────────
     with tab_add:
-        st.caption("Create a target like: Hardik achieves ₹150000 within 3 months.")
+        st.caption("Create a target like: Hardik achieves $150000 within 3 months.")
         sales_reps = sorted(raw_df["Sales Person"].dropna().astype(str).unique()) if not raw_df.empty else []
         months = _months_sorted(raw_df["Month"].dropna().astype(str).unique()) if not raw_df.empty else []
 
@@ -73,7 +73,7 @@ def render_quota_editor(raw_df: pd.DataFrame):
 
         start_month = st.selectbox("Start Month", months, key="target_start_month") if months else st.text_input("Start Month (e.g., Jan-2026)", key="target_start_month_text")
         duration_months = st.number_input("Duration (Months)", min_value=1, value=3, step=1)
-        quota = st.number_input("Quota (₹)", min_value=0.0, value=150000.0, step=1000.0)
+        quota = st.number_input("Quota (USD)", min_value=0.0, value=150000.0, step=1000.0)
 
         if st.button("Add Target", key="add_target"):
             # Prevent the same target from being inserted repeatedly.

@@ -28,6 +28,7 @@ def render_achievement_table(df: pd.DataFrame):
         "Achievement %",
         "Status",
         "Clients Count",
+        "New Client Count",
     ]
     display = df[[c for c in display_cols if c in df.columns]].copy()
 
@@ -56,10 +57,10 @@ def render_achievement_table(df: pd.DataFrame):
         .format(
             {
 
-                "Quota": "₹{:,.2f}",
-                "Total Billing": "₹{:,.2f}",
-                "New Client Billing": "₹{:,.2f}",
-                "Existing Client Billing": "₹{:,.2f}",
+                "Quota": "${:,.2f}",
+                "Total Billing": "${:,.2f}",
+                "New Client Billing": "${:,.2f}",
+                "Existing Client Billing": "${:,.2f}",
                 "Achievement %": "{:.1f}%",
             }
         )
@@ -104,8 +105,8 @@ def render_leaderboard(df: pd.DataFrame):
 
         st.dataframe(
             target_achievement[["Target", "Total Billing", "Quota", "Achievement %"]].style.format({
-                "Total Billing": "₹{:,.2f}",
-                "Quota": "₹{:,.2f}",
+                "Total Billing": "${:,.2f}",
+                "Quota": "${:,.2f}",
                 "Achievement %": "{:.1f}%",
             }),
             width="stretch",
@@ -127,7 +128,7 @@ def render_leaderboard(df: pd.DataFrame):
         rep_billing.index.name = "Rank"
 
         st.dataframe(
-            rep_billing.style.format({"Total Billing": "₹{:,.2f}", "Quota": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
+            rep_billing.style.format({"Total Billing": "${:,.2f}", "Quota": "${:,.2f}", "Achievement %": "{:.1f}%"}),
             width="stretch",
         )
 

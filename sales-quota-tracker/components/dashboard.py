@@ -15,13 +15,13 @@ def render_metrics(metrics: dict):
     with c1:
         st.metric(
             label="Total Billing",
-            value=f"₹{metrics['total_billing']:,.2f}",
+            value=f"${metrics['total_billing']:,.2f}",
         )
 
     with c2:
         st.metric(
             label="Total Quota",
-            value=f"₹{metrics['total_quota']:,.2f}",
+            value=f"${metrics['total_quota']:,.2f}",
         )
 
     with c3:

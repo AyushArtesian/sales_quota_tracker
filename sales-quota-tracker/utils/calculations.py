@@ -34,6 +34,7 @@ def compute_achievement(raw_df: pd.DataFrame, quotas: pd.DataFrame) -> pd.DataFr
                 "Achievement %",
                 "Status",
                 "Clients Count",
+                "New Client Count",
             ]
         )
 
@@ -61,6 +62,7 @@ def compute_achievement(raw_df: pd.DataFrame, quotas: pd.DataFrame) -> pd.DataFr
             new_billing = 0.0
             existing_billing = 0.0
             clients_count = 0
+            new_clients_count = 0
         else:
             end_dt = _window_end(start_dt, duration)
             in_window = base[(base["Month Date"] >= start_dt) & (base["Month Date"] <= end_dt)]
@@ -81,6 +83,7 @@ def compute_achievement(raw_df: pd.DataFrame, quotas: pd.DataFrame) -> pd.DataFr
             new_billing = float(scoped.loc[new_mask, "Billing Amount"].sum())
             existing_billing = total_billing - new_billing
             clients_count = int(scoped["Client Name"].nunique()) if "Client Name" in scoped.columns else 0
+            new_clients_count = int(scoped.loc[new_mask, "Client Name"].nunique()) if "Client Name" in scoped.columns else 0
 
         achievement_pct = round((total_billing / quota) * 100, 2) if quota > 0 else 0.0
         rows.append(
@@ -97,6 +100,7 @@ def compute_achievement(raw_df: pd.DataFrame, quotas: pd.DataFrame) -> pd.DataFr
                 "Achievement %": achievement_pct,
                 "Status": _status_label(achievement_pct),
                 "Clients Count": clients_count,
+                "New Client Count": new_clients_count,
             }
         )
 

@@ -39,7 +39,7 @@ def salesperson_quota_chart(df: pd.DataFrame):
     fig.update_layout(
         barmode="group",
         xaxis_title="Target",
-        yaxis_title="Amount (₹)",
+        yaxis_title="Amount (USD)",
         legend_title="Metric",
         height=420,
         template="plotly_white",
@@ -113,7 +113,7 @@ def monthly_trend_chart(df: pd.DataFrame):
     ))
     fig.update_layout(
         xaxis_title="Month",
-        yaxis_title="Amount (₹)",
+        yaxis_title="Amount (USD)",
         template="plotly_white",
         height=380,
     )

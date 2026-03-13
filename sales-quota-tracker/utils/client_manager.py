@@ -105,5 +105,113 @@ def get_clients() -> pd.DataFrame:
     return st.session_state.get("clients", pd.DataFrame(columns=CLIENT_COLUMNS))
 
 
+def detect_new_clients(raw_df: pd.DataFrame) -> list:
+    """Detect clients in raw_df that are not yet in the client master database."""
+    if raw_df.empty or "Client Name" not in raw_df.columns:
+        return []
+    
+    # Get unique client names from upload
+    uploaded_clients = set(raw_df["Client Name"].dropna().astype(str).str.strip().str.lower().unique())
+    
+    # Get existing client names from database
+    existing_clients = get_clients()
+    if existing_clients.empty:
+        existing_client_names = set()
+    else:
+        existing_client_names = set(
+            existing_clients["Client Name"].astype(str).str.strip().str.lower().unique()
+        )
+    
+    # Find new clients
+    new_client_names = uploaded_clients - existing_client_names
+    
+    # Return sorted list of new client names (with proper casing from raw_df)
+    new_clients = []
+    for client in sorted(new_client_names):
+        # Find the original casing from raw_df
+        original_name = raw_df[
+            raw_df["Client Name"].astype(str).str.strip().str.lower() == client
+        ]["Client Name"].iloc[0]
+        new_clients.append(original_name)
+    
+    return new_clients
+
+
+def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
+    """Add new clients to the master with their acquisition dates."""
+    existing = get_clients()
+    
+    # Get the next client ID
+    if existing.empty:
+        next_id = 1
+    else:
+        try:
+            max_id = (
+                existing["Client Id"]
+                .str.extract(r"(\d+)", expand=False)
+                .astype(int)
+                .max()
+            )
+            next_id = max_id + 1
+        except:
+            next_id = len(existing) + 1
+    
+    # Create new client rows
+    new_rows = []
+    for client_name in new_clients:
+        acq_date = acquisition_dates.get(client_name, "")
+        new_rows.append({
+            "Client Id": f"CL-{next_id:03d}",
+            "Client Name": client_name,
+            "Acquisition Date": acq_date,
+            "Consideration Expiration Month": "",
+        })
+        next_id += 1
+    
+    # Append to existing and save
+    new_df = pd.concat([
+        existing,
+        pd.DataFrame(new_rows)
+    ], ignore_index=True)
+    
+    save_clients(new_df)
+
+
 def update_clients(df: pd.DataFrame):
     save_clients(df)
+
+
+def apply_client_master_to_raw(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Merge client master fields into raw billing rows by Client Name."""
+    if raw_df is None or raw_df.empty:
+        return raw_df
+
+    clients = get_clients()
+    if clients.empty:
+        if "Client Onboarding Date" not in raw_df.columns:
+            out = raw_df.copy()
+            out["Client Onboarding Date"] = ""
+            return out
+        return raw_df
+
+    out = raw_df.copy()
+    # Drop Consideration Expiration Month from raw if it exists, to avoid duplicates on merge
+    if "Consideration Expiration Month" in out.columns:
+        out = out.drop(columns=["Consideration Expiration Month"])
+    
+    out["_client_key"] = out["Client Name"].fillna("").astype(str).str.strip().str.lower()
+
+    lookup = clients.copy()
+    lookup["_client_key"] = lookup["Client Name"].fillna("").astype(str).str.strip().str.lower()
+    lookup = lookup.drop_duplicates(subset=["_client_key"], keep="last")
+
+    merged = out.merge(
+        lookup[["_client_key", "Acquisition Date", "Consideration Expiration Month"]],
+        on="_client_key",
+        how="left",
+    )
+
+    merged["Client Onboarding Date"] = merged["Acquisition Date"].fillna("").astype(str).str.strip()
+    merged = merged.drop(columns=["_client_key", "Acquisition Date"])
+
+    return merged
