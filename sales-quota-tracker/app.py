@@ -7,6 +7,12 @@ with interactive dashboards, charts, tables, and leaderboards.
 Run:  streamlit run app.py
 """
 
+import os
+import sys
+
+# Ensure the local package folders are on the import path (useful on some deployment platforms)
+sys.path.insert(0, os.path.dirname(__file__))
+
 import streamlit as st
 import pandas as pd
 
