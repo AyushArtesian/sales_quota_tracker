@@ -15,7 +15,6 @@ def aggregate_billing(df: pd.DataFrame) -> pd.DataFrame:
             **{
                 "Total Billing": ("Billing Amount", "sum"),
                 "Clients": ("Client Name", lambda x: ", ".join(sorted(x.unique()))),
-                "Freelancers": ("Freelancer", lambda x: ", ".join(sorted(x.unique()))),
             }
         )
     )

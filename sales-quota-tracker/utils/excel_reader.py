@@ -1,54 +1,102 @@
 """
 excel_reader.py
 ---------------
-Handles reading and validating uploaded Excel files containing billing records.
+Handles reading and validating uploaded billing files (Excel/CSV).
 """
 
 import pandas as pd
 import streamlit as st
 
-REQUIRED_COLUMNS = {"Client Name", "Month", "Billing Amount", "Freelancer", "Sales Person"}
-OPTIONAL_COLUMNS = {"Client Onboarding Date", "Sales Team"}
+REQUIRED_COLUMNS = {"Date", "Type", "Description", "Sales Person", "Team", "Amount"}
+QUOTA_COLUMNS = {"Entity Type", "Entity Name", "Members", "Start Month", "Duration Months", "Quota"}
 
 
-def read_excel(uploaded_file) -> pd.DataFrame | None:
-    """Read an uploaded Excel file and return a validated DataFrame."""
+def _is_quota_schema(df: pd.DataFrame) -> bool:
+    """Return True if the dataframe looks like a quota export (quota table columns)."""
+    return QUOTA_COLUMNS.issubset(set(df.columns))
+
+
+def read_excel(uploaded_file) -> tuple[pd.DataFrame | None, str]:
+    """Read an uploaded Excel or CSV file and return a (df, type) tuple.
+
+    Returns:
+        (df, "billing") if it is billing data (expected columns).
+        (df, "quota") if it looks like a quota export.
+        (None, "error") if the file is invalid.
+    """
     try:
-        df = pd.read_excel(uploaded_file, engine="openpyxl")
+        if uploaded_file.name.endswith(".csv"):
+            # For CSV, use quoting to handle quoted fields properly
+            df = pd.read_csv(uploaded_file, quotechar='"')
+        else:
+            df = pd.read_excel(uploaded_file, engine="openpyxl")
     except Exception as exc:
-        st.error(f"Failed to read the Excel file: {exc}")
-        return None
+        st.error(f"Failed to read the file: {exc}")
+        return None, "error"
 
-    # Normalize column names (strip whitespace)
-    df.columns = df.columns.str.strip()
+    # Normalize column names: strip whitespace, quotes, BOMs
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.strip('"')
+        .str.lstrip("\ufeff")
+    )
+
+    # If the file is a quota export, return as quota data (no billing parsing)
+    if _is_quota_schema(df):
+        return df, "quota"
 
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
-        st.error(f"Missing required columns: {', '.join(sorted(missing))}")
-        return None
+        st.error(
+            f"Missing required columns: {', '.join(sorted(missing))}\n\nDetected columns: {', '.join(sorted(df.columns))}"
+        )
+        return None, "error"
 
     # Basic type coercion
-    df["Billing Amount"] = pd.to_numeric(df["Billing Amount"], errors="coerce").fillna(0)
+    df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
 
-    # Parse month values in expected format (e.g. Jan-2026). Keep original if parsing fails.
-    month_as_dt = pd.to_datetime(df["Month"], format="%b-%Y", errors="coerce")
-    month_labels = month_as_dt.dt.strftime("%b-%Y")
-    df["Month"] = month_labels.where(month_as_dt.notna(), df["Month"].astype(str)).astype(str).str.strip()
+    # Parse Date with flexible format handling
+    # Try multiple date formats: "Feb 27, 2026", "Feb-27-2026", "2026-02-27", etc.
+    date_parsed = pd.to_datetime(df["Date"], format="%b %d, %Y", errors="coerce")
 
-    df["Client Name"] = df["Client Name"].astype(str).str.strip()
-    df["Sales Person"] = df["Sales Person"].astype(str).str.strip()
-    df["Freelancer"] = df["Freelancer"].astype(str).str.strip()
+    # If some dates failed to parse, try other formats
+    failed_mask = date_parsed.isna()
+    if failed_mask.any():
+        date_parsed.loc[failed_mask] = pd.to_datetime(df.loc[failed_mask, "Date"], errors="coerce")
 
-    # Optional columns used by target analytics
-    if "Client Onboarding Date" in df.columns:
-        onboarding_dt = pd.to_datetime(df["Client Onboarding Date"], errors="coerce")
-        df["Client Onboarding Date"] = onboarding_dt.dt.strftime("%Y-%m-%d")
-    if "Sales Team" in df.columns:
-        df["Sales Team"] = df["Sales Team"].fillna("").astype(str).str.strip()
+    df["Month"] = date_parsed.dt.strftime("%b-%Y")
 
-    # Ensure optional columns exist to simplify downstream logic
-    for col in OPTIONAL_COLUMNS:
-        if col not in df.columns:
-            df[col] = ""
+    # If still some failed, try one more time with flexible parsing
+    still_failed = df["Month"].isna()
+    if still_failed.any():
+        df.loc[still_failed, "Month"] = pd.to_datetime(
+            df.loc[still_failed, "Date"], infer_datetime_format=True, errors="coerce"
+        ).dt.strftime("%b-%Y")
 
-    return df
+    # Normalize text columns
+    df["Description"] = df["Description"].astype(str).str.strip().str.strip('"')
+    df["Type"] = df["Type"].astype(str).str.strip().str.strip('"')
+    df["Sales Person"] = df["Sales Person"].astype(str).str.strip().str.strip('"')
+    df["Team"] = df["Team"].astype(str).str.strip().str.strip('"')
+    df["Date"] = df["Date"].astype(str).str.strip().str.strip('"')
+
+    # Business mapping for this organization:
+    # - Team (in source CSV) = Client/Account Name
+    # - Sales Team (internal) is a single working team by default
+    df["Client Name"] = df["Team"]
+    df["Sales Team"] = "Sales Team"
+
+    # Rename for downstream compatibility with aggregation and dashboard
+    df.rename(
+        columns={
+            "Amount": "Billing Amount",
+        },
+        inplace=True,
+    )
+
+    # Add optional columns if missing (for compatibility)
+    if "Client Onboarding Date" not in df.columns:
+        df["Client Onboarding Date"] = ""
+
+    return df, "billing"

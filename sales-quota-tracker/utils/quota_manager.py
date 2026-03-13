@@ -2,7 +2,7 @@
 quota_manager.py
 ----------------
 Manage quota entries via SQLAlchemy (SQLite) persistence.
-Targets can be for Sales Rep or Sales Team.
+Targets can be for Sales Person or Sales Team.
 """
 
 import pandas as pd
@@ -94,7 +94,7 @@ def init_quota_state(raw_df: pd.DataFrame):
         starter = pd.DataFrame(
             [
                 {
-                    "Entity Type": "Sales Rep",
+                    "Entity Type": "Sales Person",
                     "Entity Name": first_rep,
                     "Members": first_rep,
                     "Start Month": first_month,

@@ -15,3 +15,13 @@ class QuotaTarget(Base):
     start_month = Column(String(20), nullable=False, index=True)
     duration_months = Column(Integer, nullable=False, default=1)
     quota = Column(Float, nullable=False, default=0.0)
+
+
+class ClientMaster(Base):
+    __tablename__ = "client_master"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String(100), nullable=False, unique=True, index=True)
+    client_name = Column(String(200), nullable=False, index=True)
+    acquisition_date = Column(String(20), nullable=True)
+    consideration_expiration_month = Column(String(20), nullable=True)

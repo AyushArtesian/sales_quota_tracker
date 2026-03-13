@@ -75,7 +75,7 @@ def render_achievement_table(df: pd.DataFrame):
 
 
 def render_leaderboard(df: pd.DataFrame):
-    """Show top-performing targets and sales reps by achievement and billing."""
+    """Show top-performing targets and sales persons by achievement and billing."""
     st.subheader("Leaderboard")
 
     if df.empty:
@@ -112,8 +112,8 @@ def render_leaderboard(df: pd.DataFrame):
         )
 
     with col_reps:
-        st.markdown("**Sales Rep Billing from Rep Targets**")
-        rep_df = df[df["Entity Type"] == "Sales Rep"].copy() if "Entity Type" in df.columns else df.iloc[0:0]
+        st.markdown("**Sales Person Billing from Sales Person Targets**")
+        rep_df = df[df["Entity Type"] == "Sales Person"].copy() if "Entity Type" in df.columns else df.iloc[0:0]
         rep_billing = (
             rep_df.groupby("Entity Name", as_index=False)
             .agg({"Total Billing": "sum", "Quota": "sum"})

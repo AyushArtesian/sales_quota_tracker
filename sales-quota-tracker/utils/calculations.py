@@ -48,7 +48,7 @@ def compute_achievement(raw_df: pd.DataFrame, quotas: pd.DataFrame) -> pd.DataFr
 
     rows: list[dict] = []
     for target in quotas.to_dict("records"):
-        entity_type = str(target.get("Entity Type", "Sales Rep")).strip() or "Sales Rep"
+        entity_type = str(target.get("Entity Type", "Sales Person")).strip() or "Sales Person"
         entity_name = str(target.get("Entity Name", "")).strip()
         members_text = str(target.get("Members", "")).strip()
         start_month = str(target.get("Start Month", "")).strip()
