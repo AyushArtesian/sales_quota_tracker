@@ -43,7 +43,7 @@ def billing_vs_quota_chart(df: pd.DataFrame):
         height=420,
         template="plotly_white",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def salesperson_performance_chart(df: pd.DataFrame):
@@ -70,7 +70,7 @@ def salesperson_performance_chart(df: pd.DataFrame):
         height=max(300, len(sp_df) * 40 + 100),
     )
     fig.update_layout(coloraxis_showscale=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def achievement_distribution_chart(df: pd.DataFrame):
@@ -101,7 +101,7 @@ def achievement_distribution_chart(df: pd.DataFrame):
     )
     fig.update_traces(textposition="inside", textinfo="percent+label")
     fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def monthly_trend_chart(df: pd.DataFrame):
@@ -133,4 +133,4 @@ def monthly_trend_chart(df: pd.DataFrame):
         template="plotly_white",
         height=380,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")

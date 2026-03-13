@@ -46,16 +46,44 @@ st.markdown(
         padding: 1rem 1.2rem;
         border-radius: 0.75rem;
         color: white !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     }
     [data-testid="stMetric"] label,
     [data-testid="stMetric"] [data-testid="stMetricValue"],
     [data-testid="stMetric"] [data-testid="stMetricDelta"] {
         color: white !important;
     }
+
     /* Sidebar styling */
     section[data-testid="stSidebar"] {
-        background-color: #f8f9fc;
+        background-color: #f8f9fc !important;
+        color: #0b1a2a !important;
+    }
+    section[data-testid="stSidebar"] *,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] .stMarkdown {
+        color: #0b1a2a !important;
+    }
+
+    /* Sidebar widgets: enforce light backgrounds so text is readable */
+    section[data-testid="stSidebar"] .stFileUploader,
+    section[data-testid="stSidebar"] .stSelectbox,
+    section[data-testid="stSidebar"] .stMultiSelect,
+    section[data-testid="stSidebar"] .stTextInput,
+    section[data-testid="stSidebar"] .stMultiSelect > div {
+        background: rgba(255,255,255,0.95) !important;
+        border-radius: 0.55rem !important;
+        border: 1px solid rgba(0,0,0,0.12) !important;
+    }
+
+    /* Sidebar multiselect tag styling */
+    section[data-testid="stSidebar"] .stMultiSelect button {
+        background: rgba(255,255,255,0.95) !important;
+    }
+
+    /* Force the upload box to be light for readability */
+    section[data-testid="stSidebar"] .stFileUploader > div {
+        background: rgba(255,255,255,0.95) !important;
     }
     </style>
     """,

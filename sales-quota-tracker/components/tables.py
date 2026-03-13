@@ -19,20 +19,29 @@ def render_achievement_table(df: pd.DataFrame):
     display_cols = ["Client Name", "Month", "Sales Person", "Quota", "Total Billing", "Achievement %", "Status"]
     display = df[[c for c in display_cols if c in df.columns]].copy()
 
-    # Colour styling
+    # Colour styling (subtle, to keep text readable)
     def _highlight_status(row):
-        if "Achieved" in str(row.get("Status", "")) and "Almost" not in str(row.get("Status", "")):
-            return ["background-color: #d4edda"] * len(row)
-        elif "Almost" in str(row.get("Status", "")):
-            return ["background-color: #fff3cd"] * len(row)
+        status = str(row.get("Status", ""))
+        if "Achieved" in status and "Almost" not in status:
+            return ["background-color: rgba(46, 204, 113, 0.25)"] * len(row)
+        elif "Almost" in status:
+            return ["background-color: rgba(241, 196, 15, 0.18)"] * len(row)
         else:
-            return ["background-color: #f8d7da"] * len(row)
+            return ["background-color: rgba(231, 76, 60, 0.2)"] * len(row)
 
-    styled = display.style.apply(_highlight_status, axis=1).format(
-        {"Quota": "₹{:,.2f}", "Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"}
+    styled = (
+        display.style
+        .apply(_highlight_status, axis=1)
+        .format({"Quota": "₹{:,.2f}", "Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"})
+        .set_table_styles(
+            [
+                {"selector": "th", "props": [("background-color", "#f2f2f2"), ("color", "#333"), ("font-weight", "600")]},
+                {"selector": "td", "props": [("padding", "8px")]} ,
+            ]
+        )
     )
 
-    st.dataframe(styled, use_container_width=True, height=min(600, 40 * len(display) + 60))
+    st.dataframe(styled, width="stretch", height=min(600, 40 * len(display) + 60))
 
 
 def render_leaderboard(df: pd.DataFrame):
@@ -58,7 +67,7 @@ def render_leaderboard(df: pd.DataFrame):
 
         st.dataframe(
             client_lb.style.format({"Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
-            use_container_width=True,
+            width="stretch",
         )
 
     with col_sp:
@@ -74,11 +83,11 @@ def render_leaderboard(df: pd.DataFrame):
 
         st.dataframe(
             sp_lb.style.format({"Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
-            use_container_width=True,
+            width="stretch",
         )
 
 
 def render_raw_data(df: pd.DataFrame):
     """Show raw uploaded data in an expandable section."""
     with st.expander("📂 View Raw Uploaded Data"):
-        st.dataframe(df, use_container_width=True, height=400)
+        st.dataframe(df, width="stretch", height=400)

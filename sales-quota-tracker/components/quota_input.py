@@ -33,7 +33,7 @@ def render_quota_editor():
                     "Quota (₹)", min_value=0, step=1000, format="₹%d"
                 ),
             },
-            use_container_width=True,
+            width="stretch",
             num_rows="fixed",
             key="quota_editor",
         )
