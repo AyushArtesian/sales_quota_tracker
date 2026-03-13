@@ -114,7 +114,14 @@ def monthly_trend_chart(df: pd.DataFrame):
 
     month_df = df.groupby("Month", as_index=False).agg(
         {"Total Billing": "sum", "Quota": "sum"}
-    ).sort_values("Month")
+    )
+
+    # Ensure month ordering is chronological (e.g., Jan, Feb, Mar)
+    try:
+        month_df["_month_dt"] = pd.to_datetime(month_df["Month"], format="%b-%Y", errors="coerce")
+        month_df = month_df.sort_values("_month_dt").drop(columns=["_month_dt"])
+    except Exception:
+        month_df = month_df.sort_values("Month")
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(

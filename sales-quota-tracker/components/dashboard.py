@@ -39,7 +39,18 @@ def render_sidebar_filters(df: pd.DataFrame) -> dict:
     """Render sidebar filter widgets and return selected values."""
     st.sidebar.header("🔎 Filters")
 
-    months = sorted(df["Month"].unique())
+    # Ensure month sorting is chronological (e.g., Jan, Feb, Mar) rather than alphabetic
+    months = list(df["Month"].unique())
+    try:
+        month_order = (
+            pd.to_datetime(months, format="%b-%Y", errors="coerce")
+            .sort_values()
+            .reset_index(drop=True)
+        )
+        months = [m for _, m in sorted(zip(month_order, months)) if pd.notna(_)]
+    except Exception:
+        months = sorted(months)
+
     clients = sorted(df["Client Name"].unique())
     salespersons = sorted(df["Sales Person"].unique())
 

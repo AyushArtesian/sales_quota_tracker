@@ -24,8 +24,15 @@ def render_quota_editor():
     # ── Tab 1: Editable data-editor ────────────────────────────────────
     with tab_table:
         st.caption("Edit the **Quota** column directly, then click **Save Quotas**.")
+        
+        # Sort quotas chronologically by month for better readability
+        quotas_sorted = quotas.copy()
+        quotas_sorted["_month_dt"] = pd.to_datetime(quotas_sorted["Month"], format="%b-%Y", errors="coerce")
+        quotas_sorted = quotas_sorted.sort_values(["_month_dt", "Client Name"])
+        quotas_display = quotas_sorted.drop(columns=["_month_dt"])
+        
         edited = st.data_editor(
-            quotas,
+            quotas_display,
             column_config={
                 "Client Name": st.column_config.TextColumn(disabled=True),
                 "Month": st.column_config.TextColumn(disabled=True),
@@ -47,7 +54,11 @@ def render_quota_editor():
     with tab_individual:
         st.caption("Set quota for a specific Client × Month.")
         clients = sorted(quotas["Client Name"].unique())
-        months = sorted(quotas["Month"].unique())
+        
+        # Sort months chronologically instead of alphabetically
+        months_list = quotas["Month"].unique()
+        months_dt = pd.to_datetime(months_list, format="%b-%Y", errors="coerce")
+        months = [m for dt, m in sorted(zip(months_dt, months_list)) if pd.notna(dt)]
 
         sel_client = st.selectbox("Client", clients, key="qi_client")
         sel_month = st.selectbox("Month", months, key="qi_month")

@@ -19,6 +19,15 @@ def render_achievement_table(df: pd.DataFrame):
     display_cols = ["Client Name", "Month", "Sales Person", "Quota", "Total Billing", "Achievement %", "Status"]
     display = df[[c for c in display_cols if c in df.columns]].copy()
 
+    # Convert month strings to datetimes for correct default sorting, and display as readable labels
+    if "Month" in display.columns:
+        display["_month_dt"] = pd.to_datetime(display["Month"], format="%b-%Y", errors="coerce")
+        display = display.sort_values("_month_dt")
+        display.loc[display["_month_dt"].notna(), "Month"] = (
+            display.loc[display["_month_dt"].notna(), "_month_dt"].dt.strftime("%b-%Y")
+        )
+        display = display.drop(columns=["_month_dt"])
+
     # Colour styling (subtle, to keep text readable)
     def _highlight_status(row):
         status = str(row.get("Status", ""))
@@ -32,7 +41,14 @@ def render_achievement_table(df: pd.DataFrame):
     styled = (
         display.style
         .apply(_highlight_status, axis=1)
-        .format({"Quota": "₹{:,.2f}", "Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"})
+        .format(
+            {
+
+                "Quota": "₹{:,.2f}",
+                "Total Billing": "₹{:,.2f}",
+                "Achievement %": "{:.1f}%",
+            }
+        )
         .set_table_styles(
             [
                 {"selector": "th", "props": [("background-color", "#f2f2f2"), ("color", "#333"), ("font-weight", "600")]},
