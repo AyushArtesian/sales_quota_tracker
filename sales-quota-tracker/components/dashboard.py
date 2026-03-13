@@ -39,37 +39,41 @@ def render_sidebar_filters(df: pd.DataFrame) -> dict:
     """Render sidebar filter widgets and return selected values."""
     st.sidebar.header("Filters")
 
-    # Ensure month sorting is chronological (e.g., Jan, Feb, Mar) rather than alphabetic
-    months = list(df["Month"].unique())
+    # Chronological month sorting (for Start Month in target table)
+    months_list = list(df["Start Month"].dropna().astype(str).unique()) if "Start Month" in df.columns else []
     try:
         month_order = (
-            pd.to_datetime(months, format="%b-%Y", errors="coerce")
+            pd.to_datetime(months_list, format="%b-%Y", errors="coerce")
             .sort_values()
             .reset_index(drop=True)
         )
-        months = [m for _, m in sorted(zip(month_order, months)) if pd.notna(_)]
+        months = [m for _, m in sorted(zip(month_order, months_list)) if pd.notna(_)]
     except Exception:
-        months = sorted(months)
+        months = sorted(months_list)
 
-    clients = sorted(df["Client Name"].unique())
-    salespersons = sorted(df["Sales Person"].unique())
+    entity_types = sorted(df["Entity Type"].dropna().astype(str).unique()) if "Entity Type" in df.columns else []
+    entity_names = sorted(df["Entity Name"].dropna().astype(str).unique()) if "Entity Name" in df.columns else []
+    statuses = sorted(df["Status"].dropna().astype(str).unique()) if "Status" in df.columns else []
 
-    selected_months = st.sidebar.multiselect("Month", months, default=months)
-    selected_clients = st.sidebar.multiselect("Client", clients, default=clients)
-    selected_salespersons = st.sidebar.multiselect("Sales Person", salespersons, default=salespersons)
+    selected_months = st.sidebar.multiselect("Start Month", months, default=months)
+    selected_entity_types = st.sidebar.multiselect("Target Type", entity_types, default=entity_types)
+    selected_entity_names = st.sidebar.multiselect("Target Name", entity_names, default=entity_names)
+    selected_statuses = st.sidebar.multiselect("Status", statuses, default=statuses)
 
     return {
         "months": selected_months,
-        "clients": selected_clients,
-        "salespersons": selected_salespersons,
+        "entity_types": selected_entity_types,
+        "entity_names": selected_entity_names,
+        "statuses": selected_statuses,
     }
 
 
 def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     """Apply sidebar filter selections to the achievement dataframe."""
     mask = (
-        df["Month"].isin(filters["months"])
-        & df["Client Name"].isin(filters["clients"])
-        & df["Sales Person"].isin(filters["salespersons"])
+        df["Start Month"].isin(filters["months"])
+        & df["Entity Type"].isin(filters["entity_types"])
+        & df["Entity Name"].isin(filters["entity_names"])
+        & df["Status"].isin(filters["statuses"])
     )
     return df[mask].reset_index(drop=True)

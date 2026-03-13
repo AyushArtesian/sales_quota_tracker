@@ -16,14 +16,26 @@ def render_achievement_table(df: pd.DataFrame):
         st.info("No data to display.")
         return
 
-    display_cols = ["Client Name", "Month", "Sales Person", "Quota", "Total Billing", "Achievement %", "Status"]
+    display_cols = [
+        "Entity Type",
+        "Entity Name",
+        "Start Month",
+        "Duration Months",
+        "Quota",
+        "Total Billing",
+        "New Client Billing",
+        "Existing Client Billing",
+        "Achievement %",
+        "Status",
+        "Clients Count",
+    ]
     display = df[[c for c in display_cols if c in df.columns]].copy()
 
     # Convert month strings to datetimes for correct default sorting, and display as readable labels
-    if "Month" in display.columns:
-        display["_month_dt"] = pd.to_datetime(display["Month"], format="%b-%Y", errors="coerce")
+    if "Start Month" in display.columns:
+        display["_month_dt"] = pd.to_datetime(display["Start Month"], format="%b-%Y", errors="coerce")
         display = display.sort_values("_month_dt")
-        display.loc[display["_month_dt"].notna(), "Month"] = (
+        display.loc[display["_month_dt"].notna(), "Start Month"] = (
             display.loc[display["_month_dt"].notna(), "_month_dt"].dt.strftime("%b-%Y")
         )
         display = display.drop(columns=["_month_dt"])
@@ -46,6 +58,8 @@ def render_achievement_table(df: pd.DataFrame):
 
                 "Quota": "₹{:,.2f}",
                 "Total Billing": "₹{:,.2f}",
+                "New Client Billing": "₹{:,.2f}",
+                "Existing Client Billing": "₹{:,.2f}",
                 "Achievement %": "{:.1f}%",
             }
         )
@@ -61,44 +75,59 @@ def render_achievement_table(df: pd.DataFrame):
 
 
 def render_leaderboard(df: pd.DataFrame):
-    """Show top-performing clients and sales persons by billing."""
+    """Show top-performing targets and sales reps by achievement and billing."""
     st.subheader("Leaderboard")
 
     if df.empty:
         st.info("No data to display.")
         return
 
-    col_client, col_sp = st.columns(2)
+    col_targets, col_reps = st.columns(2)
 
-    with col_client:
-        st.markdown("**Top Clients by Billing**")
-        client_lb = (
-            df.groupby("Client Name", as_index=False)
-            .agg({"Total Billing": "sum", "Achievement %": "mean"})
-            .sort_values("Total Billing", ascending=False)
-            .head(10)
+    with col_targets:
+        st.markdown("**Top Targets by Achievement %**")
+        target_achievement = (
+            df.groupby(["Entity Type", "Entity Name"], as_index=False)
+            .agg({
+                "Total Billing": "sum",
+                "Quota": "sum",
+            })
         )
-        client_lb.index = range(1, len(client_lb) + 1)
-        client_lb.index.name = "Rank"
+        target_achievement["Achievement %"] = target_achievement.apply(
+            lambda r: round((r["Total Billing"] / r["Quota"]) * 100, 2) if r["Quota"] > 0 else 0,
+            axis=1,
+        )
+        target_achievement["Target"] = target_achievement["Entity Type"] + " - " + target_achievement["Entity Name"]
+        target_achievement = target_achievement.sort_values("Achievement %", ascending=False).head(10)
+        target_achievement.index = range(1, len(target_achievement) + 1)
+        target_achievement.index.name = "Rank"
 
         st.dataframe(
-            client_lb.style.format({"Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
+            target_achievement[["Target", "Total Billing", "Quota", "Achievement %"]].style.format({
+                "Total Billing": "₹{:,.2f}",
+                "Quota": "₹{:,.2f}",
+                "Achievement %": "{:.1f}%",
+            }),
             width="stretch",
         )
 
-    with col_sp:
-        st.markdown("**Top Sales Persons by Billing**")
-        sp_lb = (
-            df.groupby("Sales Person", as_index=False)
-            .agg({"Total Billing": "sum", "Achievement %": "mean"})
-            .sort_values("Total Billing", ascending=False)
-            .head(10)
+    with col_reps:
+        st.markdown("**Sales Rep Billing from Rep Targets**")
+        rep_df = df[df["Entity Type"] == "Sales Rep"].copy() if "Entity Type" in df.columns else df.iloc[0:0]
+        rep_billing = (
+            rep_df.groupby("Entity Name", as_index=False)
+            .agg({"Total Billing": "sum", "Quota": "sum"})
         )
-        sp_lb.index = range(1, len(sp_lb) + 1)
-        sp_lb.index.name = "Rank"
+        rep_billing["Achievement %"] = rep_billing.apply(
+            lambda r: round((r["Total Billing"] / r["Quota"]) * 100, 2) if r["Quota"] > 0 else 0,
+            axis=1,
+        )
+        rep_billing = rep_billing.sort_values("Total Billing", ascending=False).head(10)
+        rep_billing.index = range(1, len(rep_billing) + 1)
+        rep_billing.index.name = "Rank"
 
         st.dataframe(
-            sp_lb.style.format({"Total Billing": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
+            rep_billing.style.format({"Total Billing": "₹{:,.2f}", "Quota": "₹{:,.2f}", "Achievement %": "{:.1f}%"}),
             width="stretch",
         )
 

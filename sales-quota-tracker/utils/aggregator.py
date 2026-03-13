@@ -1,21 +1,21 @@
 """
 aggregator.py
 -------------
-Aggregation helpers for billing data.
+Aggregation helpers for billing data (Sales Person focused).
 """
 
 import pandas as pd
 
 
 def aggregate_billing(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate total billing per Client + Month, preserving Sales Person."""
+    """Aggregate total billing per Sales Person + Month."""
     agg = (
-        df.groupby(["Client Name", "Month"], as_index=False)
+        df.groupby(["Sales Person", "Month"], as_index=False)
         .agg(
             **{
                 "Total Billing": ("Billing Amount", "sum"),
-                "Sales Person": ("Sales Person", "first"),
-                "Freelancer": ("Freelancer", lambda x: ", ".join(sorted(x.unique()))),
+                "Clients": ("Client Name", lambda x: ", ".join(sorted(x.unique()))),
+                "Freelancers": ("Freelancer", lambda x: ", ".join(sorted(x.unique()))),
             }
         )
     )
@@ -23,7 +23,7 @@ def aggregate_billing(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def aggregate_by_salesperson(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate billing per Sales Person."""
+    """Aggregate total billing per Sales Person (all months)."""
     return (
         df.groupby("Sales Person", as_index=False)
         .agg(**{"Total Billing": ("Billing Amount", "sum")})
@@ -32,7 +32,7 @@ def aggregate_by_salesperson(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def aggregate_by_month(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate billing per Month."""
+    """Aggregate billing per Month (all sales persons)."""
     return (
         df.groupby("Month", as_index=False)
         .agg(**{"Total Billing": ("Billing Amount", "sum")})

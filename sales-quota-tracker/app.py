@@ -18,17 +18,16 @@ import pandas as pd
 
 # ── Utility imports ────────────────────────────────────────────────────
 from utils.excel_reader import read_excel
-from utils.aggregator import aggregate_billing
 from utils.quota_manager import init_quota_state, get_quotas
 from utils.calculations import compute_achievement, overall_metrics
 
 # ── Component imports ──────────────────────────────────────────────────
 from components.dashboard import render_metrics, render_sidebar_filters, apply_filters
 from components.charts import (
-    billing_vs_quota_chart,
-    salesperson_performance_chart,
-    achievement_distribution_chart,
+    salesperson_quota_chart,
+    achievement_status_chart,
     monthly_trend_chart,
+    salesperson_achievement_chart,
 )
 from components.quota_input import render_quota_editor
 from components.tables import render_achievement_table, render_leaderboard, render_raw_data
@@ -105,7 +104,7 @@ st.sidebar.title("Upload Data")
 uploaded_file = st.sidebar.file_uploader(
     "Upload Billing Excel",
     type=["xlsx", "xls"],
-    help="Columns required: Client Name, Month, Billing Amount, Freelancer, Sales Person",
+    help="Required: Client Name, Month, Billing Amount, Freelancer, Sales Person. Optional: Client Onboarding Date, Sales Team",
 )
 
 # ── Main flow ──────────────────────────────────────────────────────────
@@ -117,28 +116,24 @@ if uploaded_file is not None:
         # Store raw data in session state
         st.session_state["raw_df"] = raw_df
 
-        # 2. Aggregate billing
-        billing_agg = aggregate_billing(raw_df)
-        st.session_state["billing_agg"] = billing_agg
-
-        # 3. Initialise quotas (only adds new keys; keeps existing values)
-        init_quota_state(billing_agg)
-
-        # 4. Sidebar filters (based on raw data for full scope)
-        filters = render_sidebar_filters(raw_df)
+        # 2. Initialise target quotas
+        init_quota_state(raw_df)
 
         # ── Quota editor section ───────────────────────────────────────
-        with st.expander("✏️ Quota Management", expanded=False):
-            render_quota_editor()
+        with st.expander("Quota Management", expanded=False):
+            render_quota_editor(raw_df)
 
-        # 5. Compute achievement
+        # 3. Compute achievement for target windows
         quotas = get_quotas()
-        achievement_df = compute_achievement(billing_agg, quotas)
+        achievement_df = compute_achievement(raw_df, quotas)
 
-        # 6. Apply filters
+        # 4. Sidebar filters (target-level)
+        filters = render_sidebar_filters(achievement_df)
+
+        # 5. Apply filters
         filtered_df = apply_filters(achievement_df, filters)
 
-        # 7. Overall metrics
+        # 6. Overall metrics
         metrics = overall_metrics(filtered_df)
 
         # ── Layout ─────────────────────────────────────────────────────
@@ -149,17 +144,17 @@ if uploaded_file is not None:
 
         st.markdown("---")
 
-        # Charts row 1: Billing vs Quota & Sales Person
+        # Charts row 1: Sales Person Quota & Achievement %
         chart_col1, chart_col2 = st.columns(2)
         with chart_col1:
-            billing_vs_quota_chart(filtered_df)
+            salesperson_quota_chart(filtered_df)
         with chart_col2:
-            salesperson_performance_chart(filtered_df)
+            salesperson_achievement_chart(filtered_df)
 
         # Charts row 2: Achievement distribution & Monthly trend
         chart_col3, chart_col4 = st.columns(2)
         with chart_col3:
-            achievement_distribution_chart(filtered_df)
+            achievement_status_chart(filtered_df)
         with chart_col4:
             monthly_trend_chart(filtered_df)
 
@@ -180,7 +175,7 @@ else:
     # Landing state – no file uploaded yet
     st.markdown(
         """
-        ### 👋 Welcome!
+        ### Welcome!
 
         To get started, **upload a billing Excel file** using the sidebar.
 
@@ -193,11 +188,16 @@ else:
         | **Billing Amount** | Amount billed (numeric) |
         | **Freelancer** | Name of the freelancer |
         | **Sales Person** | Responsible sales person |
+        | **Client Onboarding Date** | (Optional) Client start date |
+        | **Sales Team** | (Optional) Team name |
+
+        The system tracks target achievement for **Sales Rep** or **Sales Team**
+        over multi-month windows.
 
         Once uploaded you can:
-        - 📝 Set quotas per client × month
-        - 📊 View interactive dashboards
-        - 🏅 Track leaderboards
+        - Set target quotas for sales reps or sales teams
+        - View interactive dashboards
+        - Track sales person performance & leaderboards
         """
     )
 
@@ -209,10 +209,12 @@ else:
             "Billing Amount": [50000, 62000, 45000, 38000],
             "Freelancer": ["Alice", "Alice", "Bob", "Bob"],
             "Sales Person": ["Rahul", "Rahul", "Priya", "Priya"],
+            "Client Onboarding Date": ["2025-12-15", "2025-12-15", "2026-01-10", "2026-01-10"],
+            "Sales Team": ["Team A", "Team A", "Team B", "Team B"],
         }
     )
     st.download_button(
-        "⬇️ Download Sample Template",
+        "Download Sample Template",
         data=sample.to_csv(index=False).encode(),
         file_name="billing_template.csv",
         mime="text/csv",
