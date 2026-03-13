@@ -1,16 +1,15 @@
 """
 quota_manager.py
 ----------------
-Manage quota entries: load / save / update via session state + CSV persistence.
-(Target based quotas: Sales Rep or Sales Team)
+Manage quota entries via SQLAlchemy (SQLite) persistence.
+Targets can be for Sales Rep or Sales Team.
 """
-
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-QUOTA_CSV = Path(__file__).resolve().parent.parent / "data" / "quota_data.csv"
+from .db import SessionLocal, init_db
+from .models import QuotaTarget
 
 REQUIRED_COLUMNS = [
     "Entity Type",
@@ -27,12 +26,22 @@ def _ensure_dir():
 
 
 def load_quotas() -> pd.DataFrame:
-    """Load saved quotas from CSV (or return empty frame)."""
-    if QUOTA_CSV.exists():
-        df = pd.read_csv(QUOTA_CSV)
-        df.columns = df.columns.str.strip()
-        return _normalize_quota_schema(df)
-    return pd.DataFrame(columns=REQUIRED_COLUMNS)
+    """Load saved quotas from the database (or return empty frame)."""
+    init_db()
+    with SessionLocal() as session:
+        rows = session.query(QuotaTarget).all()
+        data = [
+            {
+                "Entity Type": r.entity_type,
+                "Entity Name": r.entity_name,
+                "Members": r.members or "",
+                "Start Month": r.start_month,
+                "Duration Months": r.duration_months,
+                "Quota": r.quota,
+            }
+            for r in rows
+        ]
+    return pd.DataFrame(data, columns=REQUIRED_COLUMNS)
 
 
 def _normalize_quota_schema(df: pd.DataFrame) -> pd.DataFrame:
@@ -56,9 +65,22 @@ def _normalize_quota_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_quotas(df: pd.DataFrame):
-    """Persist quota dataframe to CSV."""
-    _ensure_dir()
-    df.to_csv(QUOTA_CSV, index=False)
+    """Persist quotas to the SQLite database."""
+    init_db()
+    with SessionLocal() as session:
+        session.query(QuotaTarget).delete()
+        for _, row in df.iterrows():
+            session.add(
+                QuotaTarget(
+                    entity_type=str(row.get("Entity Type", "") or "").strip(),
+                    entity_name=str(row.get("Entity Name", "") or "").strip(),
+                    members=str(row.get("Members", "") or "").strip(),
+                    start_month=str(row.get("Start Month", "") or "").strip(),
+                    duration_months=int(row.get("Duration Months", 1) or 1),
+                    quota=float(row.get("Quota", 0) or 0),
+                )
+            )
+        session.commit()
 
 
 def init_quota_state(raw_df: pd.DataFrame):
@@ -81,7 +103,9 @@ def init_quota_state(raw_df: pd.DataFrame):
                 }
             ]
         )
-        st.session_state["quotas"] = _normalize_quota_schema(starter)
+        normalized = _normalize_quota_schema(starter)
+        save_quotas(normalized)
+        st.session_state["quotas"] = normalized
         return
 
     st.session_state["quotas"] = _normalize_quota_schema(saved).reset_index(drop=True)
