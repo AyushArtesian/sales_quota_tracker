@@ -44,12 +44,15 @@ def render_achievement_table(df: pd.DataFrame):
     # Colour styling (subtle, to keep text readable)
     def _highlight_status(row):
         status = str(row.get("Status", ""))
-        if "Achieved" in status and "Almost" not in status:
-            return ["background-color: rgba(46, 204, 113, 0.25)"] * len(row)
-        elif "Almost" in status:
-            return ["background-color: rgba(241, 196, 15, 0.18)"] * len(row)
-        else:
+
+        # Explicitly prioritize "Not Achieved" so it does not match the broader "Achieved" substring.
+        if "Not Achieved" in status:
             return ["background-color: rgba(231, 76, 60, 0.2)"] * len(row)
+        if "Almost" in status:
+            return ["background-color: rgba(241, 196, 15, 0.18)"] * len(row)
+        if "Achieved" in status:
+            return ["background-color: rgba(46, 204, 113, 0.25)"] * len(row)
+        return ["background-color: rgba(231, 76, 60, 0.2)"] * len(row)
 
     styled = (
         display.style
