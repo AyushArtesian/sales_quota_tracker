@@ -276,12 +276,42 @@ def render_chatbot():
 
     user_question = st.text_input("Ask a question about your sales data:", key="chat_question")
 
-    # Render chat history
+    # Render chat history inside a scrollable container
+    chat_html = [
+        "<style>",
+        "  .chat-scrollbox {",
+        "    height: 420px;",
+        "    overflow-y: auto;",
+        "    padding-right: 8px;",
+        "  }",
+        "  .chat-user {",
+        "    padding: 8px;",
+        "    margin: 4px 0;",
+        "    background: #f0f0f0;",
+        "    border-radius: 8px;",
+        "  }",
+        "  .chat-assistant {",
+        "    padding: 8px;",
+        "    margin: 4px 0;",
+        "    background: #eef2ff;",
+        "    border-radius: 8px;",
+        "  }",
+        "</style>",
+        "<div class='chat-scrollbox'>",
+    ]
+
     for msg in st.session_state.get("chat_history", []):
         if msg["role"] == "user":
-            st.chat_message("user").write(msg["content"])
+            chat_html.append(
+                f"<div class='chat-user'><strong>You:</strong> {msg['content']}</div>"
+            )
         else:
-            st.chat_message("assistant").write(msg["content"])
+            chat_html.append(
+                f"<div class='chat-assistant'><strong>Assistant:</strong> {msg['content']}</div>"
+            )
+
+    chat_html.append("</div>")
+    st.markdown("\n".join(chat_html), unsafe_allow_html=True)
 
     # Handle new question
     if st.button("Ask", key="chat_ask") and user_question:
