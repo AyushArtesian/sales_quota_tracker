@@ -7,10 +7,11 @@ The Groq API key must be set via environment variable `GROQ_API_KEY` or
 Streamlit secrets `groq_api_key`.
 """
 
+import os
 import streamlit as st
 import pandas as pd
 
-from utils.groq_client import completion
+from utils.llm_client import completion
 from utils.billing_manager import load_billing_data
 from utils.quota_manager import load_quotas
 from utils.client_manager import load_clients
@@ -44,10 +45,23 @@ def _build_prompt(query: str) -> str:
     quotas = load_quotas()
     clients = load_clients()
 
-    # Convert data to CSV so the LLM can read the full contents.
-    billing_csv = billing.to_csv(index=False) if billing is not None and not billing.empty else ""
-    quotas_csv = quotas.to_csv(index=False) if quotas is not None and not quotas.empty else ""
-    clients_csv = clients.to_csv(index=False) if clients is not None and not clients.empty else ""
+    # Narrow the data included in the prompt to keep token usage low.
+    # We only include a small sample of the billing rows relevant to the query.
+    month = None
+    import re
+
+    month_match = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:uary|ch|ril|y|e|ust|tember|ober|ember)?(?:\s+\d{4})?\b", query.lower())
+    if month_match:
+        month = _normalize_month(month_match.group(0))
+
+    billing_subset = billing.copy() if billing is not None else pd.DataFrame()
+    if month is not None and "Month" in billing_subset.columns:
+        billing_subset = billing_subset[billing_subset["Month"].astype(str).str.strip() == month]
+
+    # Include only a sample of rows to avoid exceeding token limits.
+    billing_csv = billing_subset.head(50).to_csv(index=False) if not billing_subset.empty else ""
+    quotas_csv = quotas.head(50).to_csv(index=False) if quotas is not None and not quotas.empty else ""
+    clients_csv = clients.head(50).to_csv(index=False) if clients is not None and not clients.empty else ""
 
     # Load prompt template from disk (allows customizing without editing code).
     import os
@@ -132,6 +146,11 @@ def _answer_from_data(query: str) -> str | None:
     # Simple greeting / non-data question handling
     if q in {"hi", "hii", "hello", "hey", "how are you"}:
         return "Hi! Ask a question about sales billing, quotas, or client data."
+
+    # Meta question about which LLM is being used
+    if "who are you" in q or "are you" in q and ("gemini" in q or "groq" in q):
+        provider = "Gemini" if os.environ.get("LLM_PROVIDER", "gemini").lower() in {"gemini", "google", "google-gemini"} else "Groq"
+        return f"I am a chatbot powered by {provider}."
 
     # Normalize month in query
     month_match = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:uary|ch|ril|y|e|ust|tember|ober|ember)?(?:\s+\d{4})?\b", q)
@@ -232,6 +251,26 @@ def render_chatbot():
     st.markdown("---")
     st.subheader("📘 Data Chatbot")
 
+    # Model selection (useful for switching between Gemini model variants)
+    if "llm_model" not in st.session_state:
+        st.session_state["llm_model"] = os.environ.get("GEMINI_MODEL", "models/gemini-2.5-flash")
+
+    model_options = [
+        "models/gemini-2.5-flash",
+        "models/gemini-2.5-pro",
+        "models/gemini-2.0-flash",
+        "models/gemini-flash-latest",
+        "models/gemini-pro-latest",
+    ]
+
+    st.selectbox(
+        "LLM model",
+        options=model_options,
+        index=model_options.index(st.session_state["llm_model"]) if st.session_state["llm_model"] in model_options else 0,
+        key="llm_model",
+        help="Select the Gemini model to use for the chatbot.",
+    )
+
     if "chat_history" not in st.session_state:
         st.session_state["chat_history"] = []
 
@@ -258,7 +297,11 @@ def render_chatbot():
                     st.write(response_text)
                 else:
                     prompt = _build_prompt(user_question)
-                    for chunk in completion(prompt, stream=True):
+                    # Ensure selected model is used for the LLM request
+                    model = st.session_state.get("llm_model")
+                    if model:
+                        os.environ["GEMINI_MODEL"] = model
+                    for chunk in completion(prompt, model=model, stream=True):
                         response_text += chunk
                         st.write(response_text)
             except Exception as exc:
