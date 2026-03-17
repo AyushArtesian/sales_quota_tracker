@@ -24,7 +24,6 @@ from utils.client_manager import (
     apply_client_master_to_raw,
     detect_new_clients,
     detect_clients_missing_acquisition,
-    add_new_clients_with_dates,
     update_clients,
 )
 from utils.billing_manager import (
@@ -46,34 +45,11 @@ from components.charts import (
 from components.quota_input import render_quota_editor
 from components.client_master import render_client_master
 from components.tables import render_achievement_table, render_leaderboard, render_raw_data
+from components.maintenance import render_danger_zone, render_client_acquisition_modal
 
 
 # ── Stage persistence (UI navigation state) ────────────────────────────
-CACHE_DIR = ".streamlit_cache"
-STAGE_CACHE_FILE = os.path.join(CACHE_DIR, "stage.txt")
-
-def ensure_cache_dir():
-    """Create cache directory if it doesn't exist."""
-    os.makedirs(CACHE_DIR, exist_ok=True)
-
-def save_stage_cache(stage: str):
-    """Persist the current stage (quota or dashboard) to cache."""
-    ensure_cache_dir()
-    try:
-        with open(STAGE_CACHE_FILE, "w") as f:
-            f.write(stage)
-    except Exception:
-        pass
-
-def load_stage_cache() -> str:
-    """Load the cached stage from disk, defaults to 'quota'."""
-    if os.path.exists(STAGE_CACHE_FILE):
-        try:
-            with open(STAGE_CACHE_FILE, "r") as f:
-                return f.read().strip() or "quota"
-        except Exception:
-            pass
-    return "quota"
+from utils.stage_cache import load_stage_cache, save_stage_cache
 
 
 # ── Page config ────────────────────────────────────────────────────────
@@ -162,88 +138,6 @@ uploaded_file = st.sidebar.file_uploader(
     help="Required columns: Date, Type, Description, Sales Person, Team, Amount (Team is treated as Client)",
 )
 
-# Danger zone: allow full data reset + scoped deletes
-with st.sidebar.expander("Danger Zone", expanded=False):
-    st.warning("This will permanently delete data. Use with caution.")
-
-    delete_mode = st.selectbox(
-        "What do you want to delete?",
-        [
-            "-- Select action --",
-            "All data (clients/targets/transactions)",
-            "All clients",
-            "All targets",
-            "All transactions",
-            "Transactions by month",
-        ],
-        key="delete_mode",
-    )
-
-    # Prepare month choices (for month-level delete)
-    months = []
-    if "raw_df" in st.session_state and not st.session_state["raw_df"].empty:
-        months = sorted(st.session_state["raw_df"]["Month"].dropna().astype(str).unique())
-
-    if delete_mode == "Transactions by month":
-        month_to_delete = st.selectbox(
-            "Month to delete",
-            ["-- Select month --"] + months,
-            key="delete_month",
-        )
-    else:
-        month_to_delete = None
-
-    confirm = st.checkbox("Yes, I understand this cannot be undone", key="confirm_delete")
-
-    delete_button = st.button("Delete", key="confirm_delete_button")
-    if delete_button and confirm:
-        if delete_mode == "All data (clients/targets/transactions)":
-            clear_billing_data()
-            update_quotas(pd.DataFrame())
-            update_clients(pd.DataFrame())
-            # Reset in-memory session state
-            for key in ["raw_df", "quotas", "clients", "stage", "raw_file_name"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            save_stage_cache("quota")
-            st.success("All data cleared. Please re-upload a billing file to continue.")
-            st.rerun()
-
-        elif delete_mode == "All clients":
-            update_clients(pd.DataFrame())
-            if "clients" in st.session_state:
-                del st.session_state["clients"]
-            st.success("All clients deleted.")
-
-        elif delete_mode == "All targets":
-            update_quotas(pd.DataFrame())
-            if "quotas" in st.session_state:
-                del st.session_state["quotas"]
-            st.success("All targets deleted.")
-
-        elif delete_mode == "All transactions":
-            clear_billing_data()
-            if "raw_df" in st.session_state:
-                del st.session_state["raw_df"]
-            st.success("All transactions deleted.")
-
-        elif delete_mode == "Transactions by month":
-            if month_to_delete and month_to_delete != "-- Select month --":
-                deleted = delete_billing_data_by_month(month_to_delete)
-                if "raw_df" in st.session_state:
-                    st.session_state["raw_df"] = st.session_state["raw_df"][
-                        st.session_state["raw_df"]["Month"] != month_to_delete
-                    ]
-                st.success(f"Deleted {deleted} transactions for {month_to_delete}.")
-            else:
-                st.warning("Please select a month before deleting." )
-
-        else:
-            st.info("Select an action to perform.")
-        st.rerun()
-    elif delete_button and not confirm:
-        st.warning("Please confirm the action by checking the box.")
-
 # INITIALIZATION: Load from database if session state is empty
 if "raw_df" not in st.session_state:
     loaded_df = load_billing_data()
@@ -257,6 +151,10 @@ if "raw_df" not in st.session_state:
 
 # Get raw_df and stage from session state
 raw_df = st.session_state.get("raw_df", pd.DataFrame())
+
+# Sidebar maintenance / delete options
+render_danger_zone(raw_df)
+
 stage = st.session_state.get("stage", "quota")
 
 # PROCESS FILE UPLOAD if present
@@ -462,40 +360,4 @@ else:
 
 # ── Modal dialog for new clients ─────────────────────────────────────
 if st.session_state.get("show_new_client_modal"):
-    st.markdown("---")
-    st.warning("New clients detected! Please provide acquisition dates for each new client before continuing.")
-    
-    new_clients = st.session_state.get("new_clients", [])
-    acquisition_dates = {}
-    
-    for client_name in new_clients:
-        st.markdown(f"##### {client_name}")
-        acq_date = st.date_input(
-            f"Acquisition Date for {client_name}:",
-            key=f"acq_date_{client_name}",
-            help="Enter when this client was acquired"
-        )
-        if acq_date:
-            acquisition_dates[client_name] = acq_date.strftime("%Y-%m-%d")
-        else:
-            acquisition_dates[client_name] = ""
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Save Client Dates", key="save_new_clients", use_container_width=True):
-            # Save the new clients with their acquisition dates
-            add_new_clients_with_dates(new_clients, acquisition_dates)
-            st.session_state["show_new_client_modal"] = False
-            st.session_state["new_clients"] = []
-            st.success("New clients added successfully!")
-            st.rerun()
-    
-    with col2:
-        if st.button("Skip for Now", key="skip_new_clients", use_container_width=True):
-            st.session_state["show_new_client_modal"] = False
-            st.session_state["new_clients"] = []
-            st.info("You can edit client dates anytime in the Client Master section.")
-            st.rerun()
-
-    # Prevent the rest of the UI from rendering until acquisition dates are handled.
-    st.stop()
+    render_client_acquisition_modal(raw_df, st.session_state.get("new_clients", []))
