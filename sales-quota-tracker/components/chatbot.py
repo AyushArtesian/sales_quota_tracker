@@ -14,6 +14,7 @@ from utils.groq_client import completion
 from utils.billing_manager import load_billing_data
 from utils.quota_manager import load_quotas
 from utils.client_manager import load_clients
+from utils.derived_manager import load_leaderboard, load_quota_achievement, load_salesperson_billing
 
 
 def _summarize_df(df, name, max_rows=3):
@@ -169,6 +170,48 @@ def _answer_from_data(query: str) -> str | None:
             return "Yes. Sales teams present: " + ", ".join(unique)
         # Otherwise, just report the teams
         return "Sales teams: " + ", ".join(unique)
+
+    # If asking about leaderboard / top targets
+    if "leaderboard" in q or "top target" in q or ("top" in q and "achievement" in q):
+        leaderboard = load_leaderboard()
+        if leaderboard.empty:
+            return "No leaderboard data available."
+        top_rows = leaderboard.head(3)
+        return "; ".join(
+            [f"{int(r['rank'])}. {r['entity_name']} ({r['achievement_pct']}%)" for _, r in top_rows.iterrows()]
+        )
+
+    # If asking for quota achievement details
+    if "quota" in q and "achievement" in q:
+        achievement = load_quota_achievement()
+        if achievement.empty:
+            return "No quota achievement data available."
+        # Return a short summary (top 3 rows)
+        top_rows = achievement.sort_values(by=["Achievement %"], ascending=False).head(3)
+        return "; ".join(
+            [
+                f"{r['Entity Name']}: {r['Achievement %']}% (Quota {r['Quota']} vs Billing {r['Total Billing']})"
+                for _, r in top_rows.iterrows()
+            ]
+        )
+
+    # If asking about salesperson billing summary
+    if "sales person" in q and ("billing" in q or "billing amount" in q):
+        sp_bill = load_salesperson_billing()
+        if sp_bill.empty:
+            return "No salesperson billing data available."
+        # If asking for a specific rep:
+        match = re.search(r"sales person\s+([a-zA-Z]+)", q)
+        if match:
+            name = match.group(1).title()
+            row = sp_bill[sp_bill["sales_person"].str.lower() == name.lower()]
+            if not row.empty:
+                return f"{name}: {float(row.iloc[0]['total_billing']):.2f}"
+        # Otherwise return top 3
+        top3 = sp_bill.sort_values(by=["total_billing"], ascending=False).head(3)
+        return "; ".join([
+            f"{r['sales_person']}: {r['total_billing']:.2f}" for _, r in top3.iterrows()
+        ])
 
     # If asking who is the top salesperson (by total billing)
     if "top" in q and "sales" in q:

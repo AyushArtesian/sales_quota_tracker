@@ -15,12 +15,12 @@ def save_billing_data(df: pd.DataFrame):
     """Persist the raw billing dataframe to the database."""
     if df.empty:
         return
-    
+
     init_db()
     with SessionLocal() as session:
         # Clear existing billing data
         session.query(BillingData).delete()
-        
+
         # Insert new data
         for _, row in df.iterrows():
             session.add(
@@ -38,6 +38,17 @@ def save_billing_data(df: pd.DataFrame):
                 )
             )
         session.commit()
+
+    # Keep derived tables (achievement/leaderboard/salesperson billing) in sync.
+    try:
+        from .derived_manager import update_derived_tables
+        from .quota_manager import load_quotas
+
+        quotas = load_quotas()
+        update_derived_tables(df, quotas)
+    except Exception:
+        # Guard against derived table errors; core billing save should not fail.
+        pass
 
 
 def load_billing_data() -> pd.DataFrame:

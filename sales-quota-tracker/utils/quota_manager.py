@@ -82,6 +82,17 @@ def save_quotas(df: pd.DataFrame):
             )
         session.commit()
 
+    # Keep derived tables (achievement/leaderboard/salesperson billing) in sync.
+    try:
+        from .derived_manager import update_derived_tables
+        from .billing_manager import load_billing_data
+
+        raw = load_billing_data()
+        update_derived_tables(raw, df)
+    except Exception:
+        # Ensure quota updates are not blocked by derived table issues.
+        pass
+
 
 def init_quota_state(raw_df: pd.DataFrame):
     """Initialise session-state target quota frame."""

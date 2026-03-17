@@ -33,6 +33,7 @@ from utils.billing_manager import (
     delete_billing_data_by_month,
 )
 from utils.calculations import compute_achievement, overall_metrics
+from utils.derived_manager import update_derived_tables
 
 # ── Component imports ──────────────────────────────────────────────────
 from components.dashboard import render_metrics, render_sidebar_filters, apply_filters
@@ -149,6 +150,15 @@ if "raw_df" not in st.session_state:
         init_quota_state(loaded_df)
         init_client_state(loaded_df)
         st.sidebar.success("✓ Loaded data from database")
+
+        # Ensure derived tables are populated based on the latest billing + quotas.
+        try:
+            from utils.quota_manager import load_quotas
+
+            quotas_df = load_quotas()
+            update_derived_tables(loaded_df, quotas_df)
+        except Exception:
+            pass
 
 # Get raw_df and stage from session state
 raw_df = st.session_state.get("raw_df", pd.DataFrame())
