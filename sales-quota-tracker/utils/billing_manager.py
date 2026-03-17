@@ -73,3 +73,22 @@ def clear_billing_data():
     with SessionLocal() as session:
         session.query(BillingData).delete()
         session.commit()
+
+
+def delete_billing_data_by_month(month: str) -> int:
+    """Delete billing rows for a specific month.
+
+    Returns:
+        int: number of rows deleted.
+    """
+    if not month:
+        return 0
+
+    init_db()
+    with SessionLocal() as session:
+        rows = session.query(BillingData).filter(BillingData.month == month)
+        count = rows.count()
+        if count:
+            rows.delete(synchronize_session=False)
+            session.commit()
+        return count

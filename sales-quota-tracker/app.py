@@ -23,9 +23,16 @@ from utils.client_manager import (
     init_client_state,
     apply_client_master_to_raw,
     detect_new_clients,
+    detect_clients_missing_acquisition,
     add_new_clients_with_dates,
+    update_clients,
 )
-from utils.billing_manager import save_billing_data, load_billing_data, clear_billing_data
+from utils.billing_manager import (
+    save_billing_data,
+    load_billing_data,
+    clear_billing_data,
+    delete_billing_data_by_month,
+)
 from utils.calculations import compute_achievement, overall_metrics
 
 # ── Component imports ──────────────────────────────────────────────────
@@ -155,7 +162,88 @@ uploaded_file = st.sidebar.file_uploader(
     help="Required columns: Date, Type, Description, Sales Person, Team, Amount (Team is treated as Client)",
 )
 
-# ── Main flow ──────────────────────────────────────────────────────────
+# Danger zone: allow full data reset + scoped deletes
+with st.sidebar.expander("Danger Zone", expanded=False):
+    st.warning("This will permanently delete data. Use with caution.")
+
+    delete_mode = st.selectbox(
+        "What do you want to delete?",
+        [
+            "-- Select action --",
+            "All data (clients/targets/transactions)",
+            "All clients",
+            "All targets",
+            "All transactions",
+            "Transactions by month",
+        ],
+        key="delete_mode",
+    )
+
+    # Prepare month choices (for month-level delete)
+    months = []
+    if "raw_df" in st.session_state and not st.session_state["raw_df"].empty:
+        months = sorted(st.session_state["raw_df"]["Month"].dropna().astype(str).unique())
+
+    if delete_mode == "Transactions by month":
+        month_to_delete = st.selectbox(
+            "Month to delete",
+            ["-- Select month --"] + months,
+            key="delete_month",
+        )
+    else:
+        month_to_delete = None
+
+    confirm = st.checkbox("Yes, I understand this cannot be undone", key="confirm_delete")
+
+    delete_button = st.button("Delete", key="confirm_delete_button")
+    if delete_button and confirm:
+        if delete_mode == "All data (clients/targets/transactions)":
+            clear_billing_data()
+            update_quotas(pd.DataFrame())
+            update_clients(pd.DataFrame())
+            # Reset in-memory session state
+            for key in ["raw_df", "quotas", "clients", "stage", "raw_file_name"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            save_stage_cache("quota")
+            st.success("All data cleared. Please re-upload a billing file to continue.")
+            st.rerun()
+
+        elif delete_mode == "All clients":
+            update_clients(pd.DataFrame())
+            if "clients" in st.session_state:
+                del st.session_state["clients"]
+            st.success("All clients deleted.")
+
+        elif delete_mode == "All targets":
+            update_quotas(pd.DataFrame())
+            if "quotas" in st.session_state:
+                del st.session_state["quotas"]
+            st.success("All targets deleted.")
+
+        elif delete_mode == "All transactions":
+            clear_billing_data()
+            if "raw_df" in st.session_state:
+                del st.session_state["raw_df"]
+            st.success("All transactions deleted.")
+
+        elif delete_mode == "Transactions by month":
+            if month_to_delete and month_to_delete != "-- Select month --":
+                deleted = delete_billing_data_by_month(month_to_delete)
+                if "raw_df" in st.session_state:
+                    st.session_state["raw_df"] = st.session_state["raw_df"][
+                        st.session_state["raw_df"]["Month"] != month_to_delete
+                    ]
+                st.success(f"Deleted {deleted} transactions for {month_to_delete}.")
+            else:
+                st.warning("Please select a month before deleting." )
+
+        else:
+            st.info("Select an action to perform.")
+        st.rerun()
+    elif delete_button and not confirm:
+        st.warning("Please confirm the action by checking the box.")
+
 # INITIALIZATION: Load from database if session state is empty
 if "raw_df" not in st.session_state:
     loaded_df = load_billing_data()
@@ -223,12 +311,17 @@ if uploaded_file is not None:
         init_quota_state(raw_df)
         init_client_state(raw_df)
         
-        # Detect new clients and show modal dialog to collect acquisition dates
+        # Detect new clients and/or clients missing acquisition dates; show modal to collect dates
         new_clients = detect_new_clients(raw_df)
+        missing_acq_clients = detect_clients_missing_acquisition(raw_df)
+
         if new_clients:
             st.session_state["show_new_client_modal"] = True
             st.session_state["new_clients"] = new_clients
-        
+        elif missing_acq_clients:
+            st.session_state["show_new_client_modal"] = True
+            st.session_state["new_clients"] = missing_acq_clients
+
         raw_df = apply_client_master_to_raw(raw_df)
         st.session_state["raw_df"] = raw_df
         save_billing_data(raw_df)  # Persist to database for next refresh
@@ -370,7 +463,7 @@ else:
 # ── Modal dialog for new clients ─────────────────────────────────────
 if st.session_state.get("show_new_client_modal"):
     st.markdown("---")
-    st.warning("New clients detected! Please provide acquisition dates for each new client.")
+    st.warning("New clients detected! Please provide acquisition dates for each new client before continuing.")
     
     new_clients = st.session_state.get("new_clients", [])
     acquisition_dates = {}
@@ -403,3 +496,6 @@ if st.session_state.get("show_new_client_modal"):
             st.session_state["new_clients"] = []
             st.info("You can edit client dates anytime in the Client Master section.")
             st.rerun()
+
+    # Prevent the rest of the UI from rendering until acquisition dates are handled.
+    st.stop()

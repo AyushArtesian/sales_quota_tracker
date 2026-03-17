@@ -137,11 +137,52 @@ def detect_new_clients(raw_df: pd.DataFrame) -> list:
     return new_clients
 
 
+def detect_clients_missing_acquisition(raw_df: pd.DataFrame) -> list:
+    """Detect clients in raw_df whose master record is missing an acquisition date."""
+    if raw_df.empty or "Client Name" not in raw_df.columns:
+        return []
+
+    existing_clients = get_clients()
+    if existing_clients.empty:
+        return []
+
+    # Map client name -> acquisition date (case-insensitive)
+    existing_clients = existing_clients.assign(
+        _client_key=existing_clients["Client Name"].astype(str).str.strip().str.lower()
+    )
+    existing_clients = existing_clients.set_index("_client_key")
+
+    clients_to_check = (
+        raw_df["Client Name"].dropna().astype(str).str.strip().str.lower().unique().tolist()
+    )
+
+    missing = []
+    for client_key in clients_to_check:
+        if client_key in existing_clients.index:
+            acq_date = existing_clients.at[client_key, "Acquisition Date"]
+            if str(acq_date).strip() == "":
+                # Find original casing from raw_df
+                original_name = raw_df[
+                    raw_df["Client Name"].astype(str).str.strip().str.lower() == client_key
+                ]["Client Name"].iloc[0]
+                missing.append(original_name)
+    return sorted(set(missing))
+
+
 def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
-    """Add new clients to the master with their acquisition dates."""
+    """Add new clients to the master with their acquisition dates.
+
+    If a client already exists in the master, update its acquisition date instead
+    of creating a duplicate entry.
+    """
     existing = get_clients()
-    
-    # Get the next client ID
+
+    # Normalize existing client names for matching
+    existing = existing.assign(
+        _client_key=existing["Client Name"].astype(str).str.strip().str.lower(),
+    )
+
+    # Get the next client ID (for truly new clients)
     if existing.empty:
         next_id = 1
     else:
@@ -153,28 +194,48 @@ def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
                 .max()
             )
             next_id = max_id + 1
-        except:
+        except Exception:
             next_id = len(existing) + 1
-    
-    # Create new client rows
-    new_rows = []
+
+    # Update existing rows or build new rows as needed
+    updated_rows = []
+    for _, row in existing.iterrows():
+        client_key = row["_client_key"]
+        client_name = row["Client Name"]
+        acq_date = row["Acquisition Date"]
+
+        if client_name in new_clients or client_key in [c.lower() for c in new_clients]:
+            updated_date = acquisition_dates.get(client_name, acquisition_dates.get(client_key, ""))
+            if str(updated_date).strip():
+                acq_date = updated_date
+
+        updated_rows.append(
+            {
+                "Client Id": row["Client Id"],
+                "Client Name": client_name,
+                "Acquisition Date": acq_date,
+                "Consideration Expiration Month": row["Consideration Expiration Month"],
+            }
+        )
+
+    # Create new clients that do not exist yet
+    existing_names = set(existing["_client_key"].tolist())
     for client_name in new_clients:
-        acq_date = acquisition_dates.get(client_name, "")
-        new_rows.append({
-            "Client Id": f"CL-{next_id:03d}",
-            "Client Name": client_name,
-            "Acquisition Date": acq_date,
-            "Consideration Expiration Month": "",
-        })
-        next_id += 1
-    
-    # Append to existing and save
-    new_df = pd.concat([
-        existing,
-        pd.DataFrame(new_rows)
-    ], ignore_index=True)
-    
-    save_clients(new_df)
+        client_key = str(client_name).strip().lower()
+        if client_key not in existing_names:
+            acq_date = acquisition_dates.get(client_name, "")
+            updated_rows.append(
+                {
+                    "Client Id": f"CL-{next_id:03d}",
+                    "Client Name": client_name,
+                    "Acquisition Date": acq_date,
+                    "Consideration Expiration Month": "",
+                }
+            )
+            next_id += 1
+
+    # Save back working dataframe
+    save_clients(pd.DataFrame(updated_rows))
 
 
 def update_clients(df: pd.DataFrame):
