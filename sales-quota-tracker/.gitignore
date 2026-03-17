@@ -49,3 +49,9 @@ Thumbs.db
 
 # Data/storage
 data/quota_data.csv
+
+# Local development secrets
+.env
+
+# Local SQLite DB
+data/app.db

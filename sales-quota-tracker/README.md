@@ -114,6 +114,26 @@ To reset the app data, stop Streamlit and delete:
 
 ---
 
+## 🤖 Chatbot (Qwen 72B)
+
+A chatbot is available on the **Dashboard** page to answer questions about your billing, quota, and client data. It uses the Groq Qwen-72B model and requires an API key.
+
+### Configure the Groq API key
+
+Set the API key either in the environment or via Streamlit secrets:
+
+- **Environment variable**:
+  ```bash
+  export GROQ_API_KEY="your_key_here"
+  ```
+
+- **Streamlit secrets** (create `.streamlit/secrets.toml`):
+  ```toml
+  groq_api_key = "your_key_here"
+  ```
+
+Once configured, open the Dashboard and ask questions in the chatbot box.
+
 ## 🛠️ Troubleshooting
 
 - **Upload fails / missing required columns**: Ensure your file has all required columns and the column names match exactly.

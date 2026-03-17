@@ -45,6 +45,7 @@ from components.charts import (
 from components.quota_input import render_quota_editor
 from components.client_master import render_client_master
 from components.tables import render_achievement_table, render_leaderboard, render_raw_data
+from components.chatbot import render_chatbot
 from components.maintenance import render_danger_zone, render_client_acquisition_modal
 
 
@@ -309,6 +310,8 @@ if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
         render_achievement_table(filtered_df)
         st.markdown("---")
         render_leaderboard(filtered_df)
+        st.markdown("---")
+        render_chatbot()
         render_raw_data(raw_df)
 else:
     # No billing data available - show landing page
