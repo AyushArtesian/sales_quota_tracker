@@ -53,11 +53,30 @@ from components.maintenance import render_danger_zone, render_client_acquisition
 # ── Stage persistence (UI navigation state) ────────────────────────────
 from utils.stage_cache import load_stage_cache, save_stage_cache
 
+# ── Azure AD Authentication ────────────────────────────────────────────
+from auth_manager import check_authentication, show_logout_button
+
+# ✅ AUTHENTICATION CHECK - User must be logged in to access the app
+if not check_authentication():
+    st.stop()
+
 
 # ── Page config ────────────────────────────────────────────────────────
 # Initialize tab tracking (for Target Setup vs Client Master navigation)
 if "active_tab" not in st.session_state:
     st.session_state["active_tab"] = 0  # 0 = Target Setup, 1 = Client Master
+
+# Initialize theme preference
+if "theme" not in st.session_state:
+    st.session_state["theme"] = "light"  # Default theme: light
+
+if "theme_changed" not in st.session_state:
+    st.session_state["theme_changed"] = 0  # Counter to force CSS re-render
+
+def toggle_theme():
+    """Toggle between light and dark theme"""
+    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+    st.session_state.theme_changed += 1  # Force CSS refresh
 
 # Use a local favicon (base64 embedded) to customize the Streamlit tab icon
 ICON_BASE64 = (
@@ -74,63 +93,155 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for polish
-st.markdown(
-    """
-    <style>
-    /* Card-style metrics - simple plain style */
-    [data-testid="stMetric"] {
-        background: #f8f9fa;
-        padding: 1rem 1.2rem;
-        border-radius: 0.5rem;
-        border: 1px solid #e0e0e0;
-        color: #333 !important;
-    }
-    [data-testid="stMetric"] label,
-    [data-testid="stMetric"] [data-testid="stMetricValue"],
-    [data-testid="stMetric"] [data-testid="stMetricDelta"] {
-        color: #333 !important;
-    }
+# Custom CSS for polish (theme-aware)
+theme = st.session_state.get("theme", "light")
+theme_counter = st.session_state.get("theme_changed", 0)
 
-    /* Sidebar styling */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fc !important;
-        color: #0b1a2a !important;
-    }
-    section[data-testid="stSidebar"] *,
-    section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] .stMarkdown {
-        color: #0b1a2a !important;
-    }
+if theme == "dark":
+    # Dark theme
+    st.markdown(
+        f"""
+        <style>
+        /* Dark Theme | Counter: {theme_counter} */
+        :root {{
+            --primary-bg: #0e1117;
+            --secondary-bg: #161b22;
+            --text-color: #e6edf3;
+            --border-color: #30363d;
+        }}
+        
+        body {{
+            background-color: #0e1117 !important;
+            color: #e6edf3 !important;
+        }}
+        
+        /* Main content area dark theme */
+        .main {{
+            background-color: #0e1117 !important;
+        }}
+        
+        /* Card-style metrics - dark */
+        [data-testid="stMetric"] {{
+            background: #161b22 !important;
+            padding: 1rem 1.2rem;
+            border-radius: 0.5rem;
+            border: 1px solid #30363d !important;
+            color: #e6edf3 !important;
+        }}
+        [data-testid="stMetric"] label,
+        [data-testid="stMetric"] [data-testid="stMetricValue"],
+        [data-testid="stMetric"] [data-testid="stMetricDelta"] {{
+            color: #e6edf3 !important;
+        }}
 
-    /* Sidebar widgets: enforce light backgrounds so text is readable */
-    section[data-testid="stSidebar"] .stFileUploader,
-    section[data-testid="stSidebar"] .stSelectbox,
-    section[data-testid="stSidebar"] .stMultiSelect,
-    section[data-testid="stSidebar"] .stTextInput,
-    section[data-testid="stSidebar"] .stMultiSelect > div {
-        background: rgba(255,255,255,0.95) !important;
-        border-radius: 0.55rem !important;
-        border: 1px solid rgba(0,0,0,0.12) !important;
-    }
+        /* Sidebar dark theme */
+        section[data-testid="stSidebar"] {{
+            background-color: #161b22 !important;
+            color: #e6edf3 !important;
+        }}
+        section[data-testid="stSidebar"] *,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stMarkdown {{
+            color: #e6edf3 !important;
+        }}
 
-    /* Sidebar multiselect tag styling */
-    section[data-testid="stSidebar"] .stMultiSelect button {
-        background: rgba(255,255,255,0.95) !important;
-    }
+        /* Sidebar widgets dark theme */
+        section[data-testid="stSidebar"] .stFileUploader,
+        section[data-testid="stSidebar"] .stSelectbox,
+        section[data-testid="stSidebar"] .stMultiSelect,
+        section[data-testid="stSidebar"] .stTextInput,
+        section[data-testid="stSidebar"] .stMultiSelect > div {{
+            background: #0e1117 !important;
+            border-radius: 0.55rem !important;
+            border: 1px solid #30363d !important;
+        }}
 
-    /* Force the upload box to be light for readability */
-    section[data-testid="stSidebar"] .stFileUploader > div {
-        background: rgba(255,255,255,0.95) !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+        section[data-testid="stSidebar"] .stMultiSelect button {{
+            background: #0e1117 !important;
+        }}
+
+        section[data-testid="stSidebar"] .stFileUploader > div {{
+            background: #0e1117 !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    # Light theme (default)
+    st.markdown(
+        f"""
+        <style>
+        /* Light Theme | Counter: {theme_counter} */
+        :root {{
+            --primary-bg: #ffffff;
+            --secondary-bg: #f8f9fa;
+            --text-color: #0b1a2a;
+            --border-color: #e0e0e0;
+        }}
+        
+        /* Card-style metrics - light */
+        [data-testid="stMetric"] {{
+            background: #f8f9fa;
+            padding: 1rem 1.2rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e0e0e0;
+            color: #333 !important;
+        }}
+        [data-testid="stMetric"] label,
+        [data-testid="stMetric"] [data-testid="stMetricValue"],
+        [data-testid="stMetric"] [data-testid="stMetricDelta"] {{
+            color: #333 !important;
+        }}
+
+        /* Sidebar light theme */
+        section[data-testid="stSidebar"] {{
+            background-color: #f8f9fc !important;
+            color: #0b1a2a !important;
+        }}
+        section[data-testid="stSidebar"] *,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stMarkdown {{
+            color: #0b1a2a !important;
+        }}
+
+        /* Sidebar widgets light theme */
+        section[data-testid="stSidebar"] .stFileUploader,
+        section[data-testid="stSidebar"] .stSelectbox,
+        section[data-testid="stSidebar"] .stMultiSelect,
+        section[data-testid="stSidebar"] .stTextInput,
+        section[data-testid="stSidebar"] .stMultiSelect > div {{
+            background: rgba(255,255,255,0.95) !important;
+            border-radius: 0.55rem !important;
+            border: 1px solid rgba(0,0,0,0.12) !important;
+        }}
+
+        section[data-testid="stSidebar"] .stMultiSelect button {{
+            background: rgba(255,255,255,0.95) !important;
+        }}
+
+        section[data-testid="stSidebar"] .stFileUploader > div {{
+            background: rgba(255,255,255,0.95) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ── Header ─────────────────────────────────────────────────────────────
 st.title("Sales Quota Tracker")
 st.caption("Upload billing data · Set quotas · Track achievement in real time")
+
+# ── Show user info and logout button in sidebar ─────────────────────────
+show_logout_button()
+
+# ── Theme toggle button ────────────────────────────────────────────────
+st.sidebar.markdown("---")
+theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
+theme_label = "Dark Mode" if st.session_state.theme == "light" else "Light Mode"
+if st.sidebar.button(f"{theme_icon} {theme_label}", use_container_width=True):
+    toggle_theme()
+    st.rerun()
 
 # ── Sidebar: File upload ───────────────────────────────────────────────
 st.sidebar.title("Upload Data")
