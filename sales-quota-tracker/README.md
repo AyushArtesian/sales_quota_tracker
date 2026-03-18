@@ -1,69 +1,81 @@
-# 🚀 Sales Quota Tracker
+# Sales Quota Tracker
 
-A full-featured **Streamlit dashboard** for tracking sales performance & quota, built with:
+A **professional Streamlit dashboard** for tracking sales billing, quota targets, and performance dashboards — built for business users, managers, and analysts.
 
-- ✅ Azure AD Authentication (SSO)
-- ✅ Upload + persist billing data (Excel/CSV)
-- ✅ Quota management and tracking
-- ✅ Dynamic dashboards, charts, and leaderboards
-- ✅ Built-in Data Chatbot (LLM-powered)
-- ✅ Light / Dark theme toggle
+This repository is a full solution with:
 
----
-
-## 📌 Table of Contents
-
-- [Features](#-features)
-- [Getting Started](#-getting-started)
-- [Azure AD Authentication](#-azure-ad-authentication)
-- [Uploading Billing Data](#-uploading-billing-data)
-- [Chatbot](#-chatbot)
-- [Theme Toggle](#-theme-toggle)
-- [Project Structure](#-project-structure)
-- [Deployment (Azure)](#-deployment-azure)
-- [Troubleshooting](#-troubleshooting)
+- ✅ **Secure Azure AD authentication (SSO)**
+- ✅ **Billing upload + normalization (Excel / CSV)**
+- ✅ **Quota planning & tracking**
+- ✅ **Interactive dashboards + charts**
+- ✅ **AI-powered chatbot** (analysis + insights)
+- ✅ **Light / dark theme toggle**
 
 ---
 
-## 🌟 Features
+## 📌 Document Outline
 
-### ✅ Security & Access
-- Azure AD (Entra ID) authentication for secure login
-- Whitelisted users only (configured in `auth/config.py`)
-
-### 📥 Billing Upload
-- Upload Excel / CSV files
-- Built-in validation + normalization
-- Persists into local SQLite
-
-### 🎯 Quota Management
-- Define targets by Salesperson or Team
-- Track achievement % and progress
-- Update quotas via file upload or manual editing
-
-### 📊 Interactive Dashboards
-- Key metrics (Total Billing / Quota / Achievement)
-- Filters: Month, Client, Salesperson
-- Visualizations: charts + leaderboards
-
-### 🧠 Smart Chatbot
-- Ask questions about your billing/quota data
-- Powered by LLM (Groq GPT-like model)
-- Streamed responses, context-aware
-
-### 🎨 Theme Toggle
-- Light and dark themes supported
-- One-click toggle in sidebar
+1. [Overview](#-overview)
+2. [Architecture](#-architecture)
+3. [Installation & Local Development](#-installation--local-development)
+4. [Azure AD Authentication (Required)](#-azure-ad-authentication-required)
+5. [Billing Data Upload](#-billing-data-upload)
+6. [Quota Management](#-quota-management)
+7. [Dashboard + UI Overview](#-dashboard--ui-overview)
+8. [Chatbot (LLM)](#-chatbot-llm)
+9. [Theme Toggle](#-theme-toggle)
+10. [Project Structure](#-project-structure)
+11. [Deployment (Azure)](#-deployment-azure)
+12. [Troubleshooting](#-troubleshooting)
+13. [Maintenance & Extension](#-maintenance--extension)
 
 ---
 
-## 🧰 Getting Started
+## 🌐 Overview
+
+Sales Quota Tracker is designed to bring business operations and analytics together.
+It supports:
+
+- Uploading billing files and storing normalized transactions.
+- Tracking quota targets across individuals and teams.
+- Dashboards that show real-time performance vs quota.
+- A conversational chatbot to ask questions about your data.
+
+This tool is ideal for small-to-medium sales organizations that need a simple yet robust reporting and quota-tracking solution.
+
+---
+
+## 🏗️ Architecture
+
+### Core Components
+
+| Module | Purpose |
+|--------|---------|
+| `app.py` | Entry point: UI routing + orchestration |
+| `auth/` | User authentication (Azure AD OIDC) |
+| `components/` | UI components (charts, tables, chatbot, etc.) |
+| `utils/` | Business logic (data loading, calculations, persistence) |
+| `data/` | Local SQLite database storage |
+| `prompts/` | Prompt templates for chatbot |
+
+### Tech Stack
+
+- **Streamlit**: UI & web app framework
+- **SQLite (SQLAlchemy)**: Local persistence
+- **Azure AD (OIDC)**: Authentication + identity
+- **MSAL**: OAuth2 token handling
+- **Groq/LLM**: Chatbot model
+
+---
+
+## 🧰 Installation & Local Development
 
 ### Prerequisites
-- Python 3.11+
-- `pip` installed
 
-### 1) Clone the repo
+- Python 3.11+
+- `pip`
+
+### 1) Clone the repository
 
 ```bash
 git clone <repo-url>
@@ -76,8 +88,9 @@ cd sales-quota-tracker
 pip install -r requirements.txt
 ```
 
-### 3) Configure Azure AD authentication (required)
-Create `.streamlit/secrets.toml`:
+### 3) Configure Azure AD (required)
+
+Create `.streamlit/secrets.toml` with your Azure AD values:
 
 ```toml
 [auth]
@@ -89,33 +102,43 @@ redirect_uri = "http://localhost:8501/oauth2callback"
 
 > 🔒 **Never commit** `secrets.toml` to source control.
 
-### 4) Run the app
+### 4) Run locally
 
 ```bash
 streamlit run app.py
 ```
 
-✅ Navigate to `http://localhost:8501`
+Access: `http://localhost:8501`
 
 ---
 
-## 🔐 Azure AD Authentication
+## 🔐 Azure AD Authentication (Required)
 
-### Required Azure Setup
-1. Register an app in **Azure Active Directory**
-2. Set Redirect URI to:
+### Setup Steps (Azure Portal)
 
-```text
-http://localhost:8501/oauth2callback
-```
+1. Navigate to **Azure Active Directory → App registrations → New registration**
+2. Set:
+   - **Name:** `sales-quota-tracker`
+   - **Supported account types:** `Single tenant` (your org)
+   - **Redirect URI:** `http://localhost:8501/oauth2callback`
+3. Click **Register**
 
-3. Add API permissions (Microsoft Graph):
-   - `User.Read`
+### Configure Permissions
 
-4. Create a **Client Secret** (copy value immediately)
+1. Go to **API permissions** → **Add a permission**
+2. Select **Microsoft Graph** → **Delegated permissions**
+3. Add **User.Read**
+4. Click **Grant admin consent**
 
-### Whitelisted Users
-Authorized logins are in `auth/config.py`:
+### Create Client Secret
+
+1. Go to **Certificates & secrets**
+2. Click **New client secret**
+3. Copy the **value** (not the ID!) immediately
+
+### Configure Allowed Users
+
+In `auth/config.py` set the approved user list:
 
 ```python
 ALLOWED_USERS = [
@@ -126,16 +149,18 @@ ALLOWED_USERS = [
 
 ---
 
-## 📄 Uploading Billing Data
+## 📄 Billing Data Upload
 
-### Required columns (case-sensitive)
+### Required Columns (case-sensitive)
 
-- `Date` (parseable date format)
-- `Type`
-- `Description`
-- `Sales Person`
-- `Team` (mapped to `Client Name`)
-- `Amount`
+| Column | Description |
+|--------|-------------|
+| `Date` | Transaction date (any parseable format) |
+| `Type` | Billing type (Service/Product/etc.) |
+| `Description` | Description text |
+| `Sales Person` | Salesperson name |
+| `Team` | Client name (mapped to `Client Name`) |
+| `Amount` | Numeric amount |
 
 ### Sample Row
 
@@ -143,20 +168,55 @@ ALLOWED_USERS = [
 |------------|----------|------------------|--------------|-----------|--------|
 | 2026-02-01 | Service  | Monthly retainer | Priya        | Acme Corp | 50000  |
 
-> The app automatically creates:
-> - `Month` (e.g., `Feb-2026`)
-> - `Billing Amount` (numeric)
-> - `Client Name` (from `Team`)
+### System Normalizations
+
+The app will automatically create:
+
+- `Month` (e.g., `Feb-2026`)
+- `Billing Amount` (numeric conversion)
+- `Client Name` (from `Team`)
 
 ---
 
-## 🤖 Chatbot
+## 📌 Quota Management
 
-Ask questions about your sales data via the chatbot on the Dashboard.
+### Capabilities
 
-### Groq API Configuration
+- Create/update quota targets per Salesperson/Team
+- Compare actual billing vs quota
+- Track achievement percentage
 
-Set your API key as either:
+### Where it lives
+
+- UI: Dashboard / Quota Editor screens
+- Data stored in: `data/app.db`
+
+---
+
+## 📊 Dashboard & UI Overview
+
+### Main Dashboard
+
+- Key metrics: Total billing, total quota, achievement %
+- Filtering by month/client/salesperson
+- Charts: trend analysis, leaderboards
+
+### Dark + Light Theme
+
+- Toggle button in sidebar
+- Theme is persisted in session state (not in DB)
+
+---
+
+## 🤖 Chatbot (LLM)
+
+### How it works
+
+- Uses the conversation model to answer questions
+- Combines billing/quota data + prompt template
+- UI lives on the Dashboard page
+
+### Required configuration
 
 #### Environment variable
 ```bash
@@ -170,74 +230,104 @@ groq_api_key = "your_key_here"
 
 ---
 
-## 🎨 Theme Toggle
-
-Toggle between light and dark mode using the sidebar button.
-
----
-
-## 🏗️ Project Structure
+## 🧩 Project Structure
 
 ```
-├── app.py                       # Main application entry
+├── app.py                       # Streamlit entrypoint
 ├── auth/                       # Authentication module
-│   ├── __init__.py             # Exposes auth helpers
-│   ├── config.py               # Config + allowed users
-│   └── manager.py              # MSAL + login handling
+│   ├── __init__.py             # Public auth exports
+│   ├── config.py               # Allowed users / auth settings
+│   └── manager.py              # MSAL + login flow
 ├── components/                 # UI components
-│   ├── chatbot.py              # Chatbot view
-│   ├── charts.py
-│   ├── dashboard.py
-│   ├── tables.py
+│   ├── chatbot.py              # Chatbot UI
+│   ├── charts.py               # Visualization components
+│   ├── dashboard.py            # Main dashboard layout
+│   ├── tables.py               # Data tables
 │   └── ...
-├── utils/                      # Business logic
-├── data/                       # Local SQLite database
+├── utils/                      # Business logic & persistence
+│   ├── db.py                   # SQLAlchemy Init
+│   ├── models.py               # ORM models
+│   ├── billing_manager.py      # Billing ingest + cleanup
+│   ├── quota_manager.py        # Quota persistence
+│   └── ...
+├── data/                       # SQLite database
 ├── prompts/                    # Chatbot prompt templates
-├── requirements.txt
-└── README.md
+├── requirements.txt            # Python dependencies
+└── README.md                   # This doc
 ```
 
 ---
 
 ## ☁️ Deployment (Azure)
 
-### 1) Create Azure SQL / PostgreSQL
-- Use managed database to store data
+### Recommended Architecture
 
-### 2) Containerize (Docker)
-- Build a Docker image and push to ACR
+1. **Azure SQL / PostgreSQL** for shared data storage
+2. **Azure Container Registry (ACR)** for Docker images
+3. **Azure App Service** for hosting the Streamlit app
+4. **Azure Key Vault** for secrets
 
-### 3) Deploy to Azure App Service
-- Use Docker image
-- Configure environment variables and key vaults
+### Quick Deployment Steps (High-Level)
 
-> For a full step-by-step guide, see `DEPLOYMENT_PLAN.md`.
+1. Create Azure SQL / PostgreSQL instance
+2. Build Docker image:
+   ```bash
+docker build -t sales-quota-tracker:latest .
+```
+3. Push to ACR:
+   ```bash
+az acr login --name <registry>
+docker tag sales-quota-tracker:latest <registry>.azurecr.io/sales-quota-tracker:latest
+docker push <registry>.azurecr.io/sales-quota-tracker:latest
+```
+4. Create App Service (Docker) and point to ACR image
+5. Set environment variables / Key Vault references
+
+> See `DEPLOYMENT_PLAN.md` for full step-by-step deployment instructions.
 
 ---
 
 ## 🛠 Troubleshooting
 
 ### Login fails
-- Verify `secrets.toml` values
-- Ensure Azure redirect URI matches exactly
-- Confirm user is in `ALLOWED_USERS`
+- Confirm `secrets.toml` matches Azure AD app settings
+- Make sure `redirect_uri` in Azure matches exactly
+- Confirm user is listed in `auth/config.py`
 
-### Upload errors
-- Validate required columns and formatting
+### Data upload errors
+- Validate missing or incorrect column names
 - Ensure `data/app.db` is writable
 
-### Chatbot doesn’t respond
-- Confirm `GROQ_API_KEY` is set
+### Chatbot not responding
+- Verify `GROQ_API_KEY` is configured
+- Confirm the model selection is valid
+
+---
+
+## 🔧 Extending the App
+
+### Adding new metrics
+1. Update `utils/calculations.py` with new logic
+2. Add UI tiles in `components/dashboard.py`
+
+### Adding new chatbot behavior
+1. Update `prompts/chatbot_prompt.txt`
+2. Update `components/chatbot.py` parsing logic
 
 ---
 
 ## 📌 Notes
 
-This project is built for small teams and internal use. For a production deployment:
-- Use a shared cloud database (Azure SQL / PostgreSQL)
-- Add role-based access controls
-- Add monitoring & logging
+This project is built to be: 
+- modular (clean folder separation)
+- extensible (easy to add pages/components)
+- secure (Azure AD auth + whitelist)
+
+For production use, consider:
+- shared database (Azure SQL)
+- multi-tenant access control
+- logging / monitoring
 
 ---
 
-Happy tracking! 📊
+Happy tracking! 📈
