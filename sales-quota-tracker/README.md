@@ -1,78 +1,121 @@
-# Sales Quota Tracker
+# 🚀 Sales Quota Tracker
 
-A **Streamlit** dashboard for tracking sales quota achievement against billing data. This version includes **Azure AD authentication**, **theme toggling (light/dark)**, and a **chatbot** for querying your data.
+A full-featured **Streamlit dashboard** for tracking sales performance & quota, built with:
 
----
-
-## 🚀 Key Features
-
-- **Azure AD Authentication** (OIDC)
-  - Only authorized users can access the app.
-  - Login is handled via Azure AD (Entra ID) and uses Streamlit’s built-in `st.login` flow.
-- **Upload Billing Data (Excel/CSV)**
-  - Upload billing records with required columns.
-  - Data is cleaned, normalized, and saved to a local SQLite database.
-- **Quota Management**
-  - Create and manage quotas for Sales People or Teams.
-  - Supports importing quota files for bulk updates.
-- **Client Master Data**
-  - Tracks client onboarding and consideration expiration.
-  - Auto-detects new clients and prompts for acquisition dates.
-- **Interactive Dashboard**
-  - Real-time metrics, charts, and tables.
-  - Filters: Month, Client, Sales Person.
-- **Theme Toggle**
-  - Switch between **Light** and **Dark** mode.
-- **Data Chatbot**
-  - Ask questions about your billing/quota data using an LLM.
+- ✅ Azure AD Authentication (SSO)
+- ✅ Upload + persist billing data (Excel/CSV)
+- ✅ Quota management and tracking
+- ✅ Dynamic dashboards, charts, and leaderboards
+- ✅ Built-in Data Chatbot (LLM-powered)
+- ✅ Light / Dark theme toggle
 
 ---
 
-## 🧰 Setup & Run (Local Dev)
+## 📌 Table of Contents
 
-### 1) Install dependencies
+- [Features](#-features)
+- [Getting Started](#-getting-started)
+- [Azure AD Authentication](#-azure-ad-authentication)
+- [Uploading Billing Data](#-uploading-billing-data)
+- [Chatbot](#-chatbot)
+- [Theme Toggle](#-theme-toggle)
+- [Project Structure](#-project-structure)
+- [Deployment (Azure)](#-deployment-azure)
+- [Troubleshooting](#-troubleshooting)
+
+---
+
+## 🌟 Features
+
+### ✅ Security & Access
+- Azure AD (Entra ID) authentication for secure login
+- Whitelisted users only (configured in `auth/config.py`)
+
+### 📥 Billing Upload
+- Upload Excel / CSV files
+- Built-in validation + normalization
+- Persists into local SQLite
+
+### 🎯 Quota Management
+- Define targets by Salesperson or Team
+- Track achievement % and progress
+- Update quotas via file upload or manual editing
+
+### 📊 Interactive Dashboards
+- Key metrics (Total Billing / Quota / Achievement)
+- Filters: Month, Client, Salesperson
+- Visualizations: charts + leaderboards
+
+### 🧠 Smart Chatbot
+- Ask questions about your billing/quota data
+- Powered by LLM (Groq GPT-like model)
+- Streamed responses, context-aware
+
+### 🎨 Theme Toggle
+- Light and dark themes supported
+- One-click toggle in sidebar
+
+---
+
+## 🧰 Getting Started
+
+### Prerequisites
+- Python 3.11+
+- `pip` installed
+
+### 1) Clone the repo
+
+```bash
+git clone <repo-url>
+cd sales-quota-tracker
+```
+
+### 2) Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> Recommended: Use a virtual environment (venv/conda).
-
-
-### 2) Configure Azure AD authentication
-
-Create `.streamlit/secrets.toml` with your Azure AD values:
+### 3) Configure Azure AD authentication (required)
+Create `.streamlit/secrets.toml`:
 
 ```toml
 [auth]
-tenant_id = "<your-tenant-id>"
-client_id = "<your-client-id>"
-client_secret = "<your-client-secret>"
+tenant_id = "<YOUR_TENANT_ID>"
+client_id = "<YOUR_CLIENT_ID>"
+client_secret = "<YOUR_CLIENT_SECRET>"
 redirect_uri = "http://localhost:8501/oauth2callback"
 ```
 
-> **Important**: Never commit `secrets.toml`.
+> 🔒 **Never commit** `secrets.toml` to source control.
 
-
-### 3) Run the app
+### 4) Run the app
 
 ```bash
 streamlit run app.py
 ```
 
-Open the URL shown in your terminal (usually `http://localhost:8501`).
+✅ Navigate to `http://localhost:8501`
 
 ---
 
-## 🧠 Azure AD Authentication
+## 🔐 Azure AD Authentication
 
-### What’s Required
-- Azure AD App Registration (OIDC)
-- Client ID + Client Secret
-- Redirect URI: `http://localhost:8501/oauth2callback`
+### Required Azure Setup
+1. Register an app in **Azure Active Directory**
+2. Set Redirect URI to:
 
-### Authorized Users
-The app uses a whitelist configured in `auth/config.py`:
+```text
+http://localhost:8501/oauth2callback
+```
+
+3. Add API permissions (Microsoft Graph):
+   - `User.Read`
+
+4. Create a **Client Secret** (copy value immediately)
+
+### Whitelisted Users
+Authorized logins are in `auth/config.py`:
 
 ```python
 ALLOWED_USERS = [
@@ -83,62 +126,72 @@ ALLOWED_USERS = [
 
 ---
 
-## 📄 Billing Upload Format
+## 📄 Uploading Billing Data
 
-Required columns (case-sensitive):
+### Required columns (case-sensitive)
 
-- `Date` (parseable date)
+- `Date` (parseable date format)
 - `Type`
 - `Description`
 - `Sales Person`
-- `Team` (used as `Client Name` internally)
+- `Team` (mapped to `Client Name`)
 - `Amount`
 
-### Example
+### Sample Row
 
-| Date       | Type     | Description      | Sales Person | Team       | Amount |
-|------------|----------|------------------|--------------|------------|--------|
-| 2026-02-01 | Service  | Monthly retainer | Priya        | Acme Corp  | 50000  |
-| 2026-02-05 | Project  | One-time setup   | Rahul        | BetaTech   | 45000  |
+| Date       | Type     | Description      | Sales Person | Team      | Amount |
+|------------|----------|------------------|--------------|-----------|--------|
+| 2026-02-01 | Service  | Monthly retainer | Priya        | Acme Corp | 50000  |
 
-> The app will auto-create:
+> The app automatically creates:
 > - `Month` (e.g., `Feb-2026`)
-> - `Billing Amount` (numeric conversion)
+> - `Billing Amount` (numeric)
 > - `Client Name` (from `Team`)
 
 ---
 
-## 🗄️ Persistence (SQLite)
+## 🤖 Chatbot
 
-### Database Location
-- `data/app.db` — local SQLite database
+Ask questions about your sales data via the chatbot on the Dashboard.
 
-### Resetting
-To clear all data:
+### Groq API Configuration
 
+Set your API key as either:
+
+#### Environment variable
 ```bash
-rm data/app.db
-rm .streamlit_cache/stage.txt
+export GROQ_API_KEY="your_key_here"
+```
+
+#### Streamlit secrets
+```toml
+groq_api_key = "your_key_here"
 ```
 
 ---
 
-## 🧩 Project Structure
+## 🎨 Theme Toggle
+
+Toggle between light and dark mode using the sidebar button.
+
+---
+
+## 🏗️ Project Structure
 
 ```
-├── app.py                       # Main Streamlit app
+├── app.py                       # Main application entry
 ├── auth/                       # Authentication module
-│   ├── __init__.py             # Exports auth helpers
-│   ├── config.py               # Auth config + user whitelist
-│   └── manager.py              # MSAL + login logic
-├── components/                 # UI component modules
-│   ├── chatbot.py              # Chatbot component
+│   ├── __init__.py             # Exposes auth helpers
+│   ├── config.py               # Config + allowed users
+│   └── manager.py              # MSAL + login handling
+├── components/                 # UI components
+│   ├── chatbot.py              # Chatbot view
 │   ├── charts.py
 │   ├── dashboard.py
 │   ├── tables.py
 │   └── ...
-├── utils/                      # Business logic + persistence
-├── data/                       # SQLite DB
+├── utils/                      # Business logic
+├── data/                       # Local SQLite database
 ├── prompts/                    # Chatbot prompt templates
 ├── requirements.txt
 └── README.md
@@ -146,49 +199,45 @@ rm .streamlit_cache/stage.txt
 
 ---
 
-## 🤖 Chatbot (LLM)
+## ☁️ Deployment (Azure)
 
-The dashboard includes a chatbot to ask questions about your sales data.
-Requires a Groq API key.
+### 1) Create Azure SQL / PostgreSQL
+- Use managed database to store data
 
-### Configuring the Groq key
+### 2) Containerize (Docker)
+- Build a Docker image and push to ACR
 
-- **Environment variable**:
-  ```bash
-  export GROQ_API_KEY="your_key_here"
-  ```
+### 3) Deploy to Azure App Service
+- Use Docker image
+- Configure environment variables and key vaults
 
-- **Streamlit secrets**:
-  ```toml
-groq_api_key = "your_key_here"
-  ```
+> For a full step-by-step guide, see `DEPLOYMENT_PLAN.md`.
 
 ---
 
-## ⚙️ Theme Toggle (Light / Dark)
+## 🛠 Troubleshooting
 
-Use the sidebar button to switch themes.
+### Login fails
+- Verify `secrets.toml` values
+- Ensure Azure redirect URI matches exactly
+- Confirm user is in `ALLOWED_USERS`
 
----
+### Upload errors
+- Validate required columns and formatting
+- Ensure `data/app.db` is writable
 
-## 🛠️ Troubleshooting
-
-### Common Issues
-- **Login fails**: Check `secrets.toml` values and validate redirect URI in Azure.
-- **Data not saving**: Ensure `data/app.db` is writable.
-- **Chatbot not responding**: Make sure `GROQ_API_KEY` is configured.
-
----
-
-## 🚀 Next Steps
-
-1. Migrate to a cloud database (Azure SQL)
-2. Containerize with Docker
-3. Deploy to Azure App Service
+### Chatbot doesn’t respond
+- Confirm `GROQ_API_KEY` is set
 
 ---
 
 ## 📌 Notes
 
-- Designed for small teams & rapid iteration.
-- For multi-user deployment, use a shared cloud database and proper user management.
+This project is built for small teams and internal use. For a production deployment:
+- Use a shared cloud database (Azure SQL / PostgreSQL)
+- Add role-based access controls
+- Add monitoring & logging
+
+---
+
+Happy tracking! 📊
