@@ -54,7 +54,7 @@ from components.maintenance import render_danger_zone, render_client_acquisition
 from utils.stage_cache import load_stage_cache, save_stage_cache
 
 # ── Azure AD Authentication ────────────────────────────────────────────
-from auth_manager import check_authentication, show_logout_button
+from auth import check_authentication, show_logout_button
 
 # ✅ AUTHENTICATION CHECK - User must be logged in to access the app
 if not check_authentication():

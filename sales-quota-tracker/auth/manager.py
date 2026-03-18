@@ -7,13 +7,7 @@ import streamlit as st
 from msal import ConfidentialClientApplication
 import requests
 from datetime import datetime
-
-# ============================================================================
-# ✅ ALLOWED USERS - Only these 2 can login
-# ============================================================================
-ALLOWED_USERS = [
-    "ayush.mittal@artesian.io"
-]
+from auth.config import ALLOWED_USERS, OAUTH_SCOPES
 
 
 def get_auth_config():
@@ -26,7 +20,7 @@ def get_auth_config():
             "tenant_id": config["tenant_id"],
             "authority": f"https://login.microsoftonline.com/{config['tenant_id']}",
             "redirect_uri": config["redirect_uri"],
-            "scopes": ["User.Read"],
+            "scopes": OAUTH_SCOPES,
         }
     except KeyError as e:
         st.error(f"❌ Missing auth config in secrets.toml: {e}")
