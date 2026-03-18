@@ -237,7 +237,7 @@ show_logout_button()
 
 # ── Theme toggle button ────────────────────────────────────────────────
 st.sidebar.markdown("---")
-theme_icon = "🌙" if st.session_state.theme == "light" else "☀️"
+theme_icon = ""  # No icon
 theme_label = "Dark Mode" if st.session_state.theme == "light" else "Light Mode"
 if st.sidebar.button(f"{theme_icon} {theme_label}", use_container_width=True):
     toggle_theme()

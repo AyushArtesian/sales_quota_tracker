@@ -249,7 +249,7 @@ def render_chatbot():
     """Render the chatbot UI inside the dashboard."""
 
     st.markdown("---")
-    st.subheader("📘 Data Chatbot")
+    st.subheader("Data Chatbot")
 
     # Model selection (useful for switching between Gemini model variants)
     if "llm_model" not in st.session_state:

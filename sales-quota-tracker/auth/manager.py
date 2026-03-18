@@ -133,7 +133,7 @@ def show_login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("---")
-        st.markdown("### 🔐 Sales Quota Tracker")
+        st.markdown("### Sales Quota Tracker")
         st.markdown("#### Azure AD Authentication")
         st.markdown("---")
 
@@ -143,7 +143,7 @@ def show_login_page():
         )
 
         # Login button
-        if st.button("🔐 Login with Azure AD", use_container_width=True, type="primary"):
+        if st.button("Login with Azure AD", use_container_width=True, type="primary"):
             initiate_login()
 
         st.markdown("---")
@@ -198,7 +198,7 @@ def handle_auth_code(auth_code: str):
         config = get_auth_config()
         app = get_msal_app()
         
-        st.info("🔄 Authenticating with Azure AD...")
+        st.info("Authenticating with Azure AD...")
         
         # Exchange authorization code for token
         result = app.acquire_token_by_authorization_code(
