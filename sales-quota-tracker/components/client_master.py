@@ -7,7 +7,10 @@ UI for client master add/edit management.
 import pandas as pd
 import streamlit as st
 
-from utils.client_manager import get_clients, update_clients
+from utils.client_manager import get_clients, update_clients, apply_client_master_to_raw
+from utils.billing_manager import save_billing_data
+from utils.quota_manager import load_quotas
+from utils.derived_manager import update_derived_tables
 
 
 def render_client_master():
@@ -23,6 +26,7 @@ def render_client_master():
             "Client Name": st.column_config.TextColumn(required=True),
             "Acquisition Date": st.column_config.TextColumn(help="Format: YYYY-MM-DD"),
             "Consideration Expiration Month": st.column_config.TextColumn(help="Format: Jan-2026"),
+            "Excluded": st.column_config.CheckboxColumn(help="Check to exclude this client from analysis"),
         },
         num_rows="dynamic",
         width="stretch",
@@ -31,7 +35,25 @@ def render_client_master():
 
     if st.button("Save Clients", key="save_clients"):
         update_clients(edited)
-        st.success("Client master saved successfully.")
+        
+        # Re-apply exclusions to original data and re-save billing data + derived tables
+        original_df = st.session_state.get("raw_df_original")
+        if original_df is not None and not original_df.empty:
+            # Re-apply latest exclusion rules to the original unfiltered data
+            filtered_df = apply_client_master_to_raw(original_df)
+            st.session_state["raw_df"] = filtered_df
+            
+            # Re-persist the newly filtered data
+            save_billing_data(filtered_df)
+            
+            # Re-calculate derived tables with newly filtered data
+            try:
+                quotas_df = load_quotas()
+                update_derived_tables(filtered_df, quotas_df)
+            except Exception:
+                pass
+        
+        st.success("Client master saved successfully. Exclusions applied!")
 
     st.markdown("---")
     st.caption("Quick Add Client")
@@ -43,6 +65,8 @@ def render_client_master():
     with col2:
         acquisition_date = st.text_input("Acquisition Date (YYYY-MM-DD)", key="new_client_acq_date")
         expiration_month = st.text_input("Consideration Expiration Month (e.g., Jan-2026)", key="new_client_exp_month")
+
+    excluded = st.checkbox("Exclude Client", key="new_client_excluded", value=False)
 
     if st.button("Add Client", key="add_client"):
         if not client_id.strip() or not client_name.strip():
@@ -59,6 +83,7 @@ def render_client_master():
                             "Client Name": client_name.strip(),
                             "Acquisition Date": acquisition_date.strip(),
                             "Consideration Expiration Month": expiration_month.strip(),
+                            "Excluded": excluded,
                         }
                     ]
                 )

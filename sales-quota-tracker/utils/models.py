@@ -25,6 +25,7 @@ class ClientMaster(Base):
     client_name = Column(String(200), nullable=False, index=True)
     acquisition_date = Column(String(20), nullable=True)
     consideration_expiration_month = Column(String(20), nullable=True)
+    is_excluded = Column(Integer, nullable=False, default=0)  # 0=included, 1=excluded
 
 
 class BillingData(Base):

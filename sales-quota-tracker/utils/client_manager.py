@@ -15,6 +15,7 @@ CLIENT_COLUMNS = [
     "Client Name",
     "Acquisition Date",
     "Consideration Expiration Month",
+    "Excluded",
 ]
 
 
@@ -25,13 +26,14 @@ def _normalize_client_schema(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col in CLIENT_COLUMNS:
         if col not in out.columns:
-            out[col] = ""
+            out[col] = False if col == "Excluded" else ""
 
     out = out[CLIENT_COLUMNS].copy()
     out["Client Id"] = out["Client Id"].fillna("").astype(str).str.strip()
     out["Client Name"] = out["Client Name"].fillna("").astype(str).str.strip()
     out["Acquisition Date"] = out["Acquisition Date"].fillna("").astype(str).str.strip()
     out["Consideration Expiration Month"] = out["Consideration Expiration Month"].fillna("").astype(str).str.strip()
+    out["Excluded"] = out["Excluded"].fillna(False).astype(bool)
 
     out = out[out["Client Id"] != ""].copy()
     out = out.drop_duplicates(subset=["Client Id"], keep="last").reset_index(drop=True)
@@ -48,6 +50,7 @@ def load_clients() -> pd.DataFrame:
                 "Client Name": r.client_name,
                 "Acquisition Date": r.acquisition_date or "",
                 "Consideration Expiration Month": r.consideration_expiration_month or "",
+                "Excluded": bool(r.is_excluded),
             }
             for r in rows
         ]
@@ -67,6 +70,7 @@ def save_clients(df: pd.DataFrame):
                     client_name=row["Client Name"],
                     acquisition_date=row["Acquisition Date"],
                     consideration_expiration_month=row["Consideration Expiration Month"],
+                    is_excluded=1 if row["Excluded"] else 0,
                 )
             )
         session.commit()
@@ -103,6 +107,14 @@ def init_client_state(raw_df: pd.DataFrame):
 
 def get_clients() -> pd.DataFrame:
     return st.session_state.get("clients", pd.DataFrame(columns=CLIENT_COLUMNS))
+
+
+def get_non_excluded_clients() -> pd.DataFrame:
+    """Get only non-excluded clients from the client master."""
+    clients = get_clients()
+    if clients.empty:
+        return clients
+    return clients[~clients["Excluded"]].reset_index(drop=True)
 
 
 def detect_new_clients(raw_df: pd.DataFrame) -> list:
@@ -203,6 +215,7 @@ def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
         client_key = row["_client_key"]
         client_name = row["Client Name"]
         acq_date = row["Acquisition Date"]
+        excluded = row["Excluded"]
 
         if client_name in new_clients or client_key in [c.lower() for c in new_clients]:
             updated_date = acquisition_dates.get(client_name, acquisition_dates.get(client_key, ""))
@@ -215,6 +228,7 @@ def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
                 "Client Name": client_name,
                 "Acquisition Date": acq_date,
                 "Consideration Expiration Month": row["Consideration Expiration Month"],
+                "Excluded": excluded,
             }
         )
 
@@ -230,6 +244,7 @@ def add_new_clients_with_dates(new_clients: list, acquisition_dates: dict):
                     "Client Name": client_name,
                     "Acquisition Date": acq_date,
                     "Consideration Expiration Month": "",
+                    "Excluded": False,
                 }
             )
             next_id += 1
@@ -243,7 +258,10 @@ def update_clients(df: pd.DataFrame):
 
 
 def apply_client_master_to_raw(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """Merge client master fields into raw billing rows by Client Name."""
+    """Merge client master fields into raw billing rows by Client Name.
+    
+    Only includes rows with non-excluded clients.
+    """
     if raw_df is None or raw_df.empty:
         return raw_df
 
@@ -267,12 +285,17 @@ def apply_client_master_to_raw(raw_df: pd.DataFrame) -> pd.DataFrame:
     lookup = lookup.drop_duplicates(subset=["_client_key"], keep="last")
 
     merged = out.merge(
-        lookup[["_client_key", "Acquisition Date", "Consideration Expiration Month"]],
+        lookup[["_client_key", "Acquisition Date", "Consideration Expiration Month", "Excluded"]],
         on="_client_key",
         how="left",
     )
 
     merged["Client Onboarding Date"] = merged["Acquisition Date"].fillna("").astype(str).str.strip()
     merged = merged.drop(columns=["_client_key", "Acquisition Date"])
+    
+    # Filter out rows with excluded clients
+    merged["Excluded"] = merged["Excluded"].fillna(False).astype(bool)
+    merged = merged[~merged["Excluded"]].copy()
+    merged = merged.drop(columns=["Excluded"])
 
     return merged

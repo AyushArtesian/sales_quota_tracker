@@ -7,12 +7,46 @@ with interactive dashboards, charts, tables, and leaderboards.
 Run:  streamlit run app.py
 """
 
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 import os
 import sys
 
 # Ensure the local package folders are on the import path (useful on some deployment platforms)
 sys.path.insert(0, os.path.dirname(__file__))
 
+# --- Logging setup ---------------------------------------------------------
+# Write logs to logs/app.log (rotating) and to stdout so it can be captured by systemd/gunicorn.
+log_dir = Path(__file__).resolve().parent / "logs"
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / "app.log"
+
+root_logger = logging.getLogger()
+if not any(
+    isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == str(log_file)
+    for h in root_logger.handlers
+):
+    handler = RotatingFileHandler(
+        filename=str(log_file),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
+    root_logger.addHandler(stream_handler)
+
+# Streamlit + Data
 import streamlit as st
 import pandas as pd
 
@@ -56,10 +90,14 @@ from utils.stage_cache import load_stage_cache, save_stage_cache
 # ── Azure AD Authentication ────────────────────────────────────────────
 from auth import check_authentication, show_logout_button
 
+logger = logging.getLogger(__name__)
+
 # ✅ AUTHENTICATION CHECK - User must be logged in to access the app
 if not check_authentication():
+    logger.info("Authentication failed or not logged in; stopping Streamlit execution.")
     st.stop()
 
+logger.info("User authenticated, starting Sales Quota Tracker UI.")
 
 # ── Page config ────────────────────────────────────────────────────────
 # Initialize tab tracking (for Target Setup vs Client Master navigation)
@@ -255,19 +293,23 @@ uploaded_file = st.sidebar.file_uploader(
 if "raw_df" not in st.session_state:
     loaded_df = load_billing_data()
     if not loaded_df.empty:
-        st.session_state["raw_df"] = loaded_df
+        # Store ORIGINAL unfiltered billing data (will be used to re-apply exclusion rules)
+        st.session_state["raw_df_original"] = loaded_df.copy()
+        # Apply latest exclusions to get the filtered working dataframe
+        filtered_df = apply_client_master_to_raw(loaded_df)
+        st.session_state["raw_df"] = filtered_df
         st.session_state["stage"] = load_stage_cache()
         # Reinitialize quotas and clients from their database sources
         init_quota_state(loaded_df)
         init_client_state(loaded_df)
         st.sidebar.success("✓ Loaded data from database")
 
-        # Ensure derived tables are populated based on the latest billing + quotas.
+        # Ensure derived tables are populated based on the latest filtered billing + quotas.
         try:
             from utils.quota_manager import load_quotas
 
             quotas_df = load_quotas()
-            update_derived_tables(loaded_df, quotas_df)
+            update_derived_tables(filtered_df, quotas_df)
         except Exception:
             pass
 
@@ -328,6 +370,9 @@ if uploaded_file is not None:
 
     # 2. Initialize quotas and clients from billing data
     if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
+        # Store ORIGINAL unfiltered billing data for later exclusion re-application
+        st.session_state["raw_df_original"] = raw_df.copy()
+        
         init_quota_state(raw_df)
         init_client_state(raw_df)
         
@@ -342,9 +387,10 @@ if uploaded_file is not None:
             st.session_state["show_new_client_modal"] = True
             st.session_state["new_clients"] = missing_acq_clients
 
-        raw_df = apply_client_master_to_raw(raw_df)
-        st.session_state["raw_df"] = raw_df
-        save_billing_data(raw_df)  # Persist to database for next refresh
+        # Apply exclusions to get filtered working dataframe
+        filtered_df = apply_client_master_to_raw(raw_df)
+        st.session_state["raw_df"] = filtered_df
+        save_billing_data(filtered_df)  # Persist filtered data to database for next refresh
 
 # After file upload processing, refresh raw_df and stage from session state
 raw_df = st.session_state.get("raw_df", pd.DataFrame())
@@ -387,8 +433,13 @@ if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
                 save_stage_cache("dashboard")
                 st.rerun()
     else:
+        # Always apply latest Client Master exclusions before dashboard analysis.
+        # Use original unfiltered data if available, otherwise use current raw_df
+        original_df = st.session_state.get("raw_df_original", raw_df)
+        analysis_df = apply_client_master_to_raw(original_df)
+
         quotas = get_quotas()
-        achievement_df = compute_achievement(raw_df, quotas)
+        achievement_df = compute_achievement(analysis_df, quotas)
         filters = render_sidebar_filters(achievement_df)
         filtered_df = apply_filters(achievement_df, filters)
         metrics = overall_metrics(filtered_df)
@@ -433,7 +484,8 @@ if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
         render_leaderboard(filtered_df)
         st.markdown("---")
         render_chatbot()
-        render_raw_data(raw_df)
+        # Show filtered raw data (only non-excluded clients)
+        render_raw_data(analysis_df)
 else:
     # No billing data available - show landing page
     st.markdown(
