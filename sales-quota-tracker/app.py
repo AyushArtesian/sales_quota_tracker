@@ -286,7 +286,7 @@ st.sidebar.title("Upload Data")
 uploaded_file = st.sidebar.file_uploader(
     "Upload Billing File (Excel or CSV)",
     type=["xlsx", "xls", "csv"],
-    help="Required columns: Date, Type, Description, Sales Person, Team, Amount (Team is treated as Client)",
+    help="Required columns: Date, Type, Description, Team, Amount. Sales Person will be added automatically if missing.",
 )
 
 # INITIALIZATION: Load from database if session state is empty

@@ -7,8 +7,10 @@ Handles reading and validating uploaded billing files (Excel/CSV).
 import pandas as pd
 import streamlit as st
 
-REQUIRED_COLUMNS = {"Date", "Type", "Description", "Sales Person", "Team", "Amount"}
+REQUIRED_BILLING_COLUMNS = {"Date", "Type", "Description", "Team", "Amount"}
+OPTIONAL_BILLING_COLUMNS = {"Sales Person"}
 QUOTA_COLUMNS = {"Entity Type", "Entity Name", "Members", "Start Month", "Duration Months", "Quota"}
+DEFAULT_SALES_PERSON = "Paras and Hardik"
 
 
 def _is_quota_schema(df: pd.DataFrame) -> bool:
@@ -46,12 +48,15 @@ def read_excel(uploaded_file) -> tuple[pd.DataFrame | None, str]:
     if _is_quota_schema(df):
         return df, "quota"
 
-    missing = REQUIRED_COLUMNS - set(df.columns)
+    missing = REQUIRED_BILLING_COLUMNS - set(df.columns)
     if missing:
         st.error(
             f"Missing required columns: {', '.join(sorted(missing))}\n\nDetected columns: {', '.join(sorted(df.columns))}"
         )
         return None, "error"
+
+    if "Sales Person" not in df.columns:
+        df["Sales Person"] = DEFAULT_SALES_PERSON
 
     # Basic type coercion
     df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce").fillna(0)
@@ -77,7 +82,9 @@ def read_excel(uploaded_file) -> tuple[pd.DataFrame | None, str]:
     # Normalize text columns
     df["Description"] = df["Description"].astype(str).str.strip().str.strip('"')
     df["Type"] = df["Type"].astype(str).str.strip().str.strip('"')
-    df["Sales Person"] = df["Sales Person"].astype(str).str.strip().str.strip('"')
+    df["Sales Person"] = (
+        df["Sales Person"].astype(str).str.strip().str.strip('"').replace("", DEFAULT_SALES_PERSON)
+    )
     df["Team"] = df["Team"].astype(str).str.strip().str.strip('"')
     df["Date"] = df["Date"].astype(str).str.strip().str.strip('"')
 
