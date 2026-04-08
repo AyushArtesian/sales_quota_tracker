@@ -3,7 +3,8 @@
 # Allowed users list
 ALLOWED_USERS = [
     "ayush.mittal@artesian.io",
-    "sumit.sharma@artesian.io"
+    "sumit.sharma@artesian.io",
+    "paras.chopra@artesian.io"
 ]
 
 # OAuth scopes
