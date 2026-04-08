@@ -7,7 +7,12 @@ UI for client master add/edit management.
 import pandas as pd
 import streamlit as st
 
-from utils.client_manager import get_clients, update_clients, apply_client_master_to_raw
+from utils.client_manager import (
+    get_clients,
+    update_clients,
+    apply_client_master_to_raw,
+    compute_expiration_month,
+)
 from utils.billing_manager import save_billing_data
 from utils.quota_manager import load_quotas
 from utils.derived_manager import update_derived_tables
@@ -25,7 +30,10 @@ def render_client_master():
             "Client Id": st.column_config.TextColumn(required=True),
             "Client Name": st.column_config.TextColumn(required=True),
             "Acquisition Date": st.column_config.TextColumn(help="Format: YYYY-MM-DD"),
-            "Consideration Expiration Month": st.column_config.TextColumn(help="Format: Jan-2026"),
+            "Consideration Expiration Month": st.column_config.TextColumn(
+                label="Consideration Expiration Date",
+                help="Exact expiration date after 90 days (YYYY-MM-DD)",
+            ),
             "Excluded": st.column_config.CheckboxColumn(help="Check to exclude this client from analysis"),
         },
         num_rows="dynamic",
@@ -34,6 +42,13 @@ def render_client_master():
     )
 
     if st.button("Save Clients", key="save_clients"):
+        if "Consideration Expiration Month" in edited.columns and "Acquisition Date" in edited.columns:
+            edited["Consideration Expiration Month"] = edited.apply(
+                lambda row: row["Consideration Expiration Month"].strip()
+                or compute_expiration_month(row["Acquisition Date"]),
+                axis=1,
+            )
+
         update_clients(edited)
         
         # Re-apply exclusions to original data and re-save billing data + derived tables
@@ -64,7 +79,10 @@ def render_client_master():
         client_name = st.text_input("Client Name", key="new_client_name")
     with col2:
         acquisition_date = st.text_input("Acquisition Date (YYYY-MM-DD)", key="new_client_acq_date")
-        expiration_month = st.text_input("Consideration Expiration Month (e.g., Jan-2026)", key="new_client_exp_month")
+        expiration_month = st.text_input(
+            "Consideration Expiration Date (YYYY-MM-DD)",
+            key="new_client_exp_month",
+        )
 
     excluded = st.checkbox("Exclude Client", key="new_client_excluded", value=False)
 
@@ -76,13 +94,17 @@ def render_client_master():
             if duplicate:
                 st.warning("Client Id already exists. Use a unique Client Id.")
             else:
+                expiration_value = (
+                    expiration_month.strip()
+                    or compute_expiration_month(acquisition_date.strip())
+                )
                 new_row = pd.DataFrame(
                     [
                         {
                             "Client Id": client_id.strip(),
                             "Client Name": client_name.strip(),
                             "Acquisition Date": acquisition_date.strip(),
-                            "Consideration Expiration Month": expiration_month.strip(),
+                            "Consideration Expiration Month": expiration_value,
                             "Excluded": excluded,
                         }
                     ]

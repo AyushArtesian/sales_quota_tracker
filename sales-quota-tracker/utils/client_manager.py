@@ -35,9 +35,27 @@ def _normalize_client_schema(df: pd.DataFrame) -> pd.DataFrame:
     out["Consideration Expiration Month"] = out["Consideration Expiration Month"].fillna("").astype(str).str.strip()
     out["Excluded"] = out["Excluded"].fillna(False).astype(bool)
 
+    out["Consideration Expiration Month"] = out.apply(
+        lambda row: row["Consideration Expiration Month"]
+        or compute_expiration_month(row["Acquisition Date"]),
+        axis=1,
+    )
+
     out = out[out["Client Id"] != ""].copy()
     out = out.drop_duplicates(subset=["Client Id"], keep="last").reset_index(drop=True)
     return out
+
+
+def compute_expiration_month(acquisition_date: str) -> str:
+    if not str(acquisition_date).strip():
+        return ""
+
+    acquisition_dt = pd.to_datetime(str(acquisition_date).strip(), errors="coerce")
+    if pd.isna(acquisition_dt):
+        return ""
+
+    expiration_dt = acquisition_dt + pd.Timedelta(days=90)
+    return expiration_dt.strftime("%Y-%m-%d")
 
 
 def load_clients() -> pd.DataFrame:
@@ -292,7 +310,19 @@ def apply_client_master_to_raw(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     merged["Client Onboarding Date"] = merged["Acquisition Date"].fillna("").astype(str).str.strip()
     merged = merged.drop(columns=["_client_key", "Acquisition Date"])
-    
+
+    merged["_billing_date"] = pd.to_datetime(merged["Date"], errors="coerce")
+    merged["_client_expiration"] = pd.to_datetime(
+        merged["Client Onboarding Date"], errors="coerce"
+    ) + pd.Timedelta(days=90)
+    valid_expiration = (
+        merged["_client_expiration"].isna()
+        | merged["_billing_date"].isna()
+        | (merged["_billing_date"] <= merged["_client_expiration"])
+    )
+    merged = merged[valid_expiration].copy()
+    merged = merged.drop(columns=["_billing_date", "_client_expiration"])
+
     # Filter out rows with excluded clients
     merged["Excluded"] = merged["Excluded"].fillna(False).astype(bool)
     merged = merged[~merged["Excluded"]].copy()
